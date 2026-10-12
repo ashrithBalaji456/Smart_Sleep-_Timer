@@ -321,21 +321,26 @@ public class MediaControlManager {
         MediaController firstWithPauseAction = null;
 
         for (MediaController controller : controllers) {
-            PlaybackState state = controller.getPlaybackState();
-            if (state != null) {
-                int stateCode = state.getState();
-                boolean isPlaying = (stateCode == PlaybackState.STATE_PLAYING ||
-                        stateCode == PlaybackState.STATE_BUFFERING ||
-                        stateCode == PlaybackState.STATE_CONNECTING);
+            if (controller == null) continue;
+            try {
+                PlaybackState state = controller.getPlaybackState();
+                if (state != null) {
+                    int stateCode = state.getState();
+                    boolean isPlaying = (stateCode == PlaybackState.STATE_PLAYING ||
+                            stateCode == PlaybackState.STATE_BUFFERING ||
+                            stateCode == PlaybackState.STATE_CONNECTING);
 
-                if (isPlaying) {
-                    firstPlaying = controller;
-                    break;
+                    if (isPlaying) {
+                        firstPlaying = controller;
+                        break;
+                    }
+                    long actions = state.getActions();
+                    if ((actions & PlaybackState.ACTION_PAUSE) != 0 && firstWithPauseAction == null) {
+                        firstWithPauseAction = controller;
+                    }
                 }
-                long actions = state.getActions();
-                if ((actions & PlaybackState.ACTION_PAUSE) != 0 && firstWithPauseAction == null) {
-                    firstWithPauseAction = controller;
-                }
+            } catch (Exception e) {
+                Log.w(TAG, "Transient error reading media controller state: " + e.getMessage());
             }
         }
 
@@ -357,7 +362,12 @@ public class MediaControlManager {
 
         String packageName = target.getPackageName();
         String appName = resolveAppName(packageName);
-        PlaybackState state = target.getPlaybackState();
+        PlaybackState state = null;
+        try {
+            state = target.getPlaybackState();
+        } catch (Exception e) {
+            Log.w(TAG, "Could not retrieve playback state for " + appName + ": " + e.getMessage());
+        }
 
         boolean isPlaying = false;
         boolean canPause = false;
@@ -391,15 +401,24 @@ public class MediaControlManager {
             }
         }
 
-        MediaMetadata metadata = target.getMetadata();
+        MediaMetadata metadata = null;
+        try {
+            metadata = target.getMetadata();
+        } catch (Exception e) {
+            Log.w(TAG, "Could not retrieve metadata for " + appName + ": " + e.getMessage());
+        }
+
         String trackTitle = null;
         String artist = null;
 
         if (metadata != null) {
-            trackTitle = metadata.getString(MediaMetadata.METADATA_KEY_TITLE);
-            artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST);
-            if (artist == null) {
-                artist = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST);
+            try {
+                trackTitle = metadata.getString(MediaMetadata.METADATA_KEY_TITLE);
+                artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST);
+                if (artist == null) {
+                    artist = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST);
+                }
+            } catch (Exception ignored) {
             }
         }
 

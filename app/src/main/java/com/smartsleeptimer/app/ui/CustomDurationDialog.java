@@ -52,9 +52,63 @@ public class CustomDurationDialog extends Dialog {
         Button btnCancel = findViewById(R.id.btnDialogCancel);
         Button btnApply = findViewById(R.id.btnDialogApply);
 
-        btnCancel.setOnClickListener(v -> dismiss());
+        Button btnQuickAdd5m = findViewById(R.id.btnQuickAdd5m);
+        Button btnQuickAdd15m = findViewById(R.id.btnQuickAdd15m);
+        Button btnQuickAdd30m = findViewById(R.id.btnQuickAdd30m);
+        Button btnQuickAdd1h = findViewById(R.id.btnQuickAdd1h);
+        Button btnQuickClear = findViewById(R.id.btnQuickClear);
 
+        if (btnQuickAdd5m != null) btnQuickAdd5m.setOnClickListener(v -> addMinutes(5));
+        if (btnQuickAdd15m != null) btnQuickAdd15m.setOnClickListener(v -> addMinutes(15));
+        if (btnQuickAdd30m != null) btnQuickAdd30m.setOnClickListener(v -> addMinutes(30));
+        if (btnQuickAdd1h != null) btnQuickAdd1h.setOnClickListener(v -> addMinutes(60));
+        if (btnQuickClear != null) btnQuickClear.setOnClickListener(v -> clearInputs());
+
+        etMinutes.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                validateAndApply();
+                return true;
+            }
+            return false;
+        });
+
+        btnCancel.setOnClickListener(v -> dismiss());
         btnApply.setOnClickListener(v -> validateAndApply());
+    }
+
+    private void addMinutes(int addedMins) {
+        tvErrorMessage.setVisibility(View.GONE);
+        int currentHours = parseField(etHours);
+        int currentMinutes = parseField(etMinutes);
+
+        int totalMinutes = (currentHours * 60) + currentMinutes + addedMins;
+        if (totalMinutes > 24 * 60) {
+            totalMinutes = 24 * 60;
+        }
+
+        int newHours = totalMinutes / 60;
+        int newMinutes = totalMinutes % 60;
+
+        etHours.setText(newHours > 0 ? String.valueOf(newHours) : "");
+        etMinutes.setText(newMinutes > 0 ? String.valueOf(newMinutes) : (newHours > 0 ? "0" : ""));
+        etMinutes.setSelection(etMinutes.getText().length());
+    }
+
+    private void clearInputs() {
+        tvErrorMessage.setVisibility(View.GONE);
+        etHours.setText("");
+        etMinutes.setText("");
+    }
+
+    private int parseField(EditText editText) {
+        if (editText == null || editText.getText() == null) return 0;
+        String val = editText.getText().toString().trim();
+        if (val.isEmpty()) return 0;
+        try {
+            return Integer.parseInt(val);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private void validateAndApply() {

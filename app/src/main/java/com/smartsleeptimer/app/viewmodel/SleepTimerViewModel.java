@@ -67,16 +67,11 @@ public class SleepTimerViewModel extends AndroidViewModel {
             return;
         }
         TimerState currentState = getTimerState().getValue();
-        if (currentState == TimerState.RUNNING) {
+        if (currentState == TimerState.RUNNING || currentState == TimerState.PAUSED) {
             cancelTimer();
         }
         preferences.saveInactiveState(TimerState.READY, durationMillis);
-
-        Intent intent = new Intent(getApplication(), SleepTimerService.class);
-        intent.setAction(SleepTimerService.ACTION_START);
-        intent.putExtra(SleepTimerService.EXTRA_DURATION_MS, durationMillis);
-        cancelTimer();
-        preferences.saveInactiveState(TimerState.READY, durationMillis);
+        SleepTimerService.updateIdleDuration(durationMillis);
     }
 
     public boolean startTimer() {
@@ -97,8 +92,13 @@ public class SleepTimerViewModel extends AndroidViewModel {
         Intent intent = new Intent(getApplication(), SleepTimerService.class);
         intent.setAction(SleepTimerService.ACTION_START);
         intent.putExtra(SleepTimerService.EXTRA_DURATION_MS, duration);
-        ContextCompat.startForegroundService(getApplication(), intent);
-        return true;
+        try {
+            ContextCompat.startForegroundService(getApplication(), intent);
+            return true;
+        } catch (Exception e) {
+            android.util.Log.e("SleepTimerViewModel", "Could not start timer service: " + e.getMessage(), e);
+            return false;
+        }
     }
 
     public boolean pauseTimer() {
@@ -112,8 +112,13 @@ public class SleepTimerViewModel extends AndroidViewModel {
 
         Intent intent = new Intent(getApplication(), SleepTimerService.class);
         intent.setAction(SleepTimerService.ACTION_PAUSE);
-        getApplication().startService(intent);
-        return true;
+        try {
+            getApplication().startService(intent);
+            return true;
+        } catch (Exception e) {
+            android.util.Log.e("SleepTimerViewModel", "Could not pause timer service: " + e.getMessage(), e);
+            return false;
+        }
     }
 
     public boolean resumeTimer() {
@@ -127,8 +132,13 @@ public class SleepTimerViewModel extends AndroidViewModel {
 
         Intent intent = new Intent(getApplication(), SleepTimerService.class);
         intent.setAction(SleepTimerService.ACTION_RESUME);
-        ContextCompat.startForegroundService(getApplication(), intent);
-        return true;
+        try {
+            ContextCompat.startForegroundService(getApplication(), intent);
+            return true;
+        } catch (Exception e) {
+            android.util.Log.e("SleepTimerViewModel", "Could not resume timer service: " + e.getMessage(), e);
+            return false;
+        }
     }
 
     public void cancelTimer() {
@@ -138,7 +148,11 @@ public class SleepTimerViewModel extends AndroidViewModel {
 
         Intent intent = new Intent(getApplication(), SleepTimerService.class);
         intent.setAction(SleepTimerService.ACTION_CANCEL);
-        getApplication().startService(intent);
+        try {
+            getApplication().startService(intent);
+        } catch (Exception e) {
+            android.util.Log.e("SleepTimerViewModel", "Could not cancel timer service: " + e.getMessage(), e);
+        }
     }
 
     public void refreshTimer() {
@@ -148,7 +162,11 @@ public class SleepTimerViewModel extends AndroidViewModel {
         if (state == TimerState.RUNNING && remaining <= 0) {
             Intent intent = new Intent(getApplication(), SleepTimerService.class);
             intent.setAction(SleepTimerService.ACTION_EXPIRE);
-            getApplication().startService(intent);
+            try {
+                getApplication().startService(intent);
+            } catch (Exception e) {
+                android.util.Log.e("SleepTimerViewModel", "Could not trigger expired timer: " + e.getMessage(), e);
+            }
         }
     }
 }

@@ -79,11 +79,22 @@ public class CircularTimerView extends View {
         if (w > 0 && h > 0) {
             float cx = w / 2f;
             float cy = h / 2f;
-            // Subtle 2-color gradient across the ring
+            // Subtle 2-color gradient across the ring aligned with 12 o'clock (-90 degrees)
             int[] colors = new int[]{startColor, endColor, startColor};
             float[] positions = new float[]{0.0f, 0.5f, 1.0f};
             SweepGradient sweepGradient = new SweepGradient(cx, cy, colors, positions);
+            android.graphics.Matrix matrix = new android.graphics.Matrix();
+            matrix.postRotate(-90f, cx, cy);
+            sweepGradient.setLocalMatrix(matrix);
             progressPaint.setShader(sweepGradient);
+        }
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        if (progressAnimator != null) {
+            progressAnimator.cancel();
         }
     }
 

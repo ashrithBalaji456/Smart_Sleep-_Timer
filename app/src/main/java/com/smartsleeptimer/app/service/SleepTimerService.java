@@ -118,6 +118,17 @@ public class SleepTimerService extends Service {
         return lastCompletionResultLiveData;
     }
 
+    /**
+     * Updates LiveData streams when duration is modified while the timer service is idle.
+     */
+    public static void updateIdleDuration(long durationMs) {
+        if (durationMs <= 0) return;
+        selectedDurationLiveData.postValue(durationMs);
+        remainingMillisLiveData.postValue(durationMs);
+        progressFractionLiveData.postValue(1.0f);
+        timerStateLiveData.postValue(TimerState.READY);
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -374,23 +385,55 @@ public class SleepTimerService extends Service {
             return;
         }
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                        triggerElapsedRealtime,
-                        alarmPendingIntent
-                );
-            } else {
-                alarmManager.setExact(
-                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                        triggerElapsedRealtime,
-                        alarmPendingIntent
-                );
+            boolean canScheduleExact = true;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                canScheduleExact = alarmManager.canScheduleExactAlarms();
             }
-            Log.d(TAG, "Exact alarm scheduled for Doze wake-up at elapsed: " + triggerElapsedRealtime);
+
+            if (canScheduleExact) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarmManager.setExactAndAllowWhileIdle(
+                            AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                            triggerElapsedRealtime,
+                            alarmPendingIntent
+                    );
+                } else {
+                    alarmManager.setExact(
+                            AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                            triggerElapsedRealtime,
+                            alarmPendingIntent
+                    );
+                }
+                Log.d(TAG, "Exact alarm scheduled for Doze wake-up at elapsed: " + triggerElapsedRealtime);
+            } else {
+                Log.w(TAG, "Exact alarm permission not granted. Falling back to setAndAllowWhileIdle.");
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarmManager.setAndAllowWhileIdle(
+                            AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                            triggerElapsedRealtime,
+                            alarmPendingIntent
+                    );
+                } else {
+                    alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerElapsedRealtime, alarmPendingIntent);
+                }
+            }
         } catch (SecurityException e) {
-            Log.w(TAG, "SecurityException scheduling exact alarm: " + e.getMessage());
-            alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerElapsedRealtime, alarmPendingIntent);
+            Log.w(TAG, "SecurityException scheduling exact alarm: " + e.getMessage() + ". Falling back to inexact idle alarm.");
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarmManager.setAndAllowWhileIdle(
+                            AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                            triggerElapsedRealtime,
+                            alarmPendingIntent
+                    );
+                } else {
+                    alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerElapsedRealtime, alarmPendingIntent);
+                }
+            } catch (Exception ex) {
+                Log.e(TAG, "Fallback alarm scheduling also failed: " + ex.getMessage());
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Unexpected error scheduling alarm: " + e.getMessage());
         }
     }
 
