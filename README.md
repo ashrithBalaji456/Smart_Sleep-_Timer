@@ -1,266 +1,347 @@
+<div align="center">
+
 # 🌙 Smart Sleep Timer
 
-> A native, battery-efficient Android sleep timer that accurately counts down in the background and automatically pauses active media playback (Spotify, YouTube, Amazon Music, and more) when you fall asleep.
+### Let your music wind down. Let yourself sleep.
 
-[![Android Platform](https://img.shields.io/badge/Platform-Android-3DDC84.svg?style=flat&logo=android)](https://www.android.com/)
-[![Language](https://img.shields.io/badge/Language-Java%2017-ED8B00.svg?style=flat&logo=openjdk)](https://www.java.com/)
-[![Min SDK](https://img.shields.io/badge/Min%20SDK-26%20(Android%208.0)-blue.svg)](https://developer.android.com/about/dashboards)
-[![Target SDK](https://img.shields.io/badge/Target%20SDK-34%20(Android%2014)-brightgreen.svg)](https://developer.android.com/about/versions/14)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-32%20Passed-success.svg)](#-test-results--regression-matrix)
+A native Android sleep timer that counts down reliably, pauses supported media when the timer expires, and notifies you when the session is complete.
 
----
+<p>
+  <img src="https://img.shields.io/badge/Platform-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android">
+  <img src="https://img.shields.io/badge/Language-Java-orange?style=for-the-badge&logo=openjdk&logoColor=white" alt="Java">
+  <img src="https://img.shields.io/badge/UI-XML-1572B6?style=for-the-badge" alt="XML">
+  <img src="https://img.shields.io/badge/Build-Gradle-02303A?style=for-the-badge&logo=gradle" alt="Gradle">
+</p>
 
-## 📖 Table of Contents
-1. [Project Overview & Problem Statement](#-project-overview--problem-statement)
-2. [Key Features](#-key-features)
-3. [Technology Stack](#-technology-stack)
-4. [Architecture & System Design](#-architecture--system-design)
-5. [How It Works](#-how-it-works)
-   - [Monotonic Background Timing](#1-drift-free-monotonic-timing)
-   - [Media Control & State Verification](#2-media-session-control--verification)
-6. [Required Android Permissions & Security](#-required-android-permissions--security)
-7. [How to Build and Install the APK](#-how-to-build-and-install-the-apk)
-8. [Test Results & Regression Matrix](#-test-results--regression-matrix)
-9. [Screenshots](#-screenshots)
-10. [Known Limitations](#-known-limitations)
-11. [Future Improvements](#-future-improvements)
-12. [Portfolio & Resume Summary](#-portfolio--resume-summary)
+**A focused, offline-first Android project — no backend and no internet permission required.**
+
+[Features](#-features) · [How it works](#-how-it-works) · [Permissions](#-permissions) · [Build](#-build-and-install) · [Test evidence](#-test-evidence) · [Roadmap](#-six-phase-build-journey)
+
+</div>
 
 ---
 
-## 🌌 Project Overview & Problem Statement
+## ✨ At a glance
 
-Many people listen to music, podcasts, audiobooks, or white noise to drift off to sleep. However, most music players lack built-in sleep timers, or their timers are buried deep inside app menus. As a result, audio frequently plays throughout the entire night, draining device battery, wasting cellular data, and disrupting deep sleep cycles.
+| | |
+|---|---|
+| **App type** | Native Android application |
+| **Implementation** | Java + XML layouts |
+| **Build system** | Gradle / Android Studio |
+| **Core workflow** | Select duration → start timer → media pauses at expiry |
+| **Media integration** | Android media-session / notification-listener based integration |
+| **Network dependency** | None required for the timer workflow |
+| **Backend** | None |
+| **Repository** | [Smart_Sleep-_Timer](https://github.com/ashrithBalaji456/Smart_Sleep-_Timer) |
 
-**Smart Sleep Timer** solves this problem as a standalone, lightweight, privacy-first Android utility:
-- Set a timer in two taps using clear presets (15m, 30m, 45m, 1h, 2h) or a custom duration picker.
-- Lock your phone and go to sleep without worrying about background CPU drain.
-- When the timer expires, the app leverages Android's native `MediaSessionManager` APIs to locate active audio playback and dispatches a verified pause command without killing external apps or requesting root access.
+> **Evidence note:** The test results in this README are recorded from the developer's reported manual tests on an iQOO Neo7 Pro running Android 16. They are not an independently audited test report. Add screenshots, screen recordings, and device/build details in the evidence section to make the results independently reviewable.
 
----
+## 🚀 Features
 
-## ✨ Key Features
+- **Quick presets:** 15, 30, 45, 60, and 120 minutes.
+- **Custom duration:** choose a timer duration for your own routine.
+- **Timer controls:** Start, Pause, Resume, and Cancel.
+- **Background countdown:** designed to continue while the screen is locked.
+- **Media pause at expiry:** attempts to pause the active supported media session.
+- **Completion notification:** alerts you when the timer finishes.
+- **Permission-aware behavior:** handles notification permission denial and media-access setup.
+- **No server required:** timer operation is local to the device.
 
-- **🌙 Calming Nighttime Aesthetic**: Tailored deep-navy dark theme (`#0B0F19`) with cyan glow accents (`#00E5FF`) designed specifically for bedside use.
-- **⏱️ Dual Presets & Custom Duration**: Quick one-tap preset chips (15m, 30m, 45m, 1h, 2h) plus an intuitive custom duration dialog with fast `+5m`, `+15m`, `+30m`, `+1h`, and `Clear` chips.
-- **⚡ 30-Second Quick Verification Timer**: A dedicated button allowing full testing of countdown, pause, resume, cancel, and auto-pause in 30 seconds.
-- **🔄 Matrix-Aligned Circular Arc (`CircularTimerView`)**: Custom view rendering an animated sweep-gradient ring that smoothly counts down from 12 o'clock.
-- **🔒 Rock-Solid Background Execution**: Runs an Android Foreground Service (`SleepTimerService`) with native notification chronometer and `AlarmManager.setExactAndAllowWhileIdle()` to survive deep Android Doze mode.
-- **🎵 Multi-Player Media Control**: Dispatches pause commands to Spotify, YouTube, YouTube Music, Amazon Music, Apple Music, SoundCloud, and any compliant Android media player.
-- **🔎 Verified Playback Result**: Performs a timed 600ms verification post-check to truthfully report whether playback actually halted vs. unconfirmed.
-- **🛡️ 100% Offline & Private**: Zero internet permissions requested (`android.permission.INTERNET` is omitted). No tracking, no ads, and no backend data collection.
+## 🎬 How it works
 
----
+### User journey
 
-## 🛠️ Technology Stack
-
-- **Platform**: Native Android
-- **Language**: Java 17
-- **UI Framework**: Android XML Layouts, Custom Views, Material Components
-- **Architecture**: MVVM (Model-View-ViewModel) + Android Architecture Components (LiveData, ViewModel)
-- **Background Execution**: Android Foreground Service (`specialUse` subtype for Android 14+), `AlarmManager`
-- **Media Controls**: Android `MediaSessionManager`, `MediaController`, `NotificationListenerService`
-- **Build System**: Gradle 8.5, Android Gradle Plugin 8.2.2
-- **Testing**: JUnit 4 (32 automated unit tests)
-
----
-
-## 🏛️ Architecture & System Design
-
-```
-app/src/main/java/com/smartsleeptimer/app/
-├── MainActivity.java                       # Main UI controller: coordinates Timer UI, Media Test Card & Outcome Banner
-├── service/
-│   ├── SleepTimerService.java              # Foreground Service: manages countdown, Doze wakeups, auto-pause & notifications
-│   └── TimerCompletionReceiver.java        # BroadcastReceiver: handles AlarmManager exact deadline wake-up under Doze
-├── media/
-│   ├── MediaControlManager.java            # Inspects active sessions, dispatches pause, and verifies playback state
-│   ├── MediaControlResult.java             # Immutable outcome model (Confirmed, Unconfirmed, No Session, Missing Access)
-│   ├── MediaAccessHelper.java              # Helper for NotificationListener permission state and Settings intent
-│   ├── MediaNotificationListenerService.java # Android NotificationListenerService required by MediaSessionManager
-│   └── MediaSessionInfo.java               # POJO representing detected media app metadata and state
-├── util/
-│   ├── TimerPreferences.java               # SharedPreferences wrapper for persistent deadline & recovery across reboots
-│   └── TimeFormatter.java                  # Monotonic millisecond to string format utility (mm:ss, hh:mm:ss)
-├── viewmodel/
-│   ├── SleepTimerViewModel.java            # Manages timer state, debounced user events, and service communication
-│   └── MediaControlViewModel.java          # Manages manual media session testing LiveData
-├── engine/
-│   ├── SleepTimerEngine.java               # Drift-free monotonic clock state machine
-│   └── TimerListener.java                  # State change and countdown tick callback interface
-├── ui/
-│   ├── CircularTimerView.java              # Custom View with sweep gradient shader matrix aligned to 12 o'clock
-│   └── CustomDurationDialog.java           # Dialog for custom hours/minutes selection with quick increment chips
-└── model/
-    └── TimerState.java                     # State enum: READY, RUNNING, PAUSED, COMPLETED
+```mermaid
+flowchart TD
+    A([🌙 Open Smart Sleep Timer]) --> B[Choose a preset or custom duration]
+    B --> C{Ready to begin?}
+    C -- No --> B
+    C -- Yes --> D[Start countdown]
+    D --> E[Timer runs in background]
+    E --> F{User action?}
+    F -- Pause --> G[Countdown paused]
+    G -- Resume --> E
+    F -- Cancel --> H([Timer cancelled])
+    F -- Time expires --> I[Attempt to pause active media]
+    I --> J[Show completion notification]
+    J --> K([Session complete])
 ```
 
----
+### Timer state model
 
-## ⚙️ How It Works
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Running: Start
+    Running --> Paused: Pause
+    Paused --> Running: Resume
+    Running --> Completed: Countdown reaches zero
+    Running --> Idle: Cancel
+    Paused --> Idle: Cancel
+    Completed --> Idle: Dismiss / reset for next session
+```
 
-### 1. Drift-Free Monotonic Timing
-Smart Sleep Timer avoids battery-draining continuous background loops. When a timer starts:
-1. It records the deadline using `SystemClock.elapsedRealtime() + durationMillis`.
-2. A single exact alarm is registered via `AlarmManager.setExactAndAllowWhileIdle()`, targeting `TimerCompletionReceiver`.
-3. The ongoing lock-screen notification displays Android's native Chronometer configured to count down to the target epoch, allowing the device CPU to sleep while keeping the UI display accurate.
-4. If Android terminates the Activity to reclaim memory, the deadline is retrieved from `TimerPreferences` on reopen, recalculating the exact remaining seconds instantly.
+### Expiry sequence
 
-### 2. Media Session Control & Verification
-When the timer deadline triggers:
-1. `SleepTimerService` removes the countdown notification and invokes `MediaControlManager.pauseAtTimerCompletion()`.
-2. **Selection Strategy**:
-   - Queries `MediaSessionManager.getActiveSessions()`.
-   - Prioritizes controllers currently in `PlaybackState.STATE_PLAYING`, `STATE_BUFFERING`, or `STATE_CONNECTING` that advertise `ACTION_PAUSE` or `ACTION_PLAY_PAUSE`.
-   - If no app is actively playing, falls back to the most recently paused session with pause capability.
-3. **Execution**: Dispatches `MediaController.getTransportControls().pause()`. If controls are unavailable, falls back to dispatching `KeyEvent.KEYCODE_MEDIA_PAUSE`.
-4. **Verification Routine**: Schedules a 600ms post-check:
-   - If `getPlaybackState().getState()` reflects `STATE_PAUSED` or `STATE_STOPPED`, flags `TIMER_COMPLETED_PAUSED_CONFIRMED`.
-   - If playback state is unconfirmed or unchanged, truthfully flags `TIMER_COMPLETED_PAUSE_UNCONFIRMED`.
-5. **Notification**: Posts a dedicated completion notification (`ID: 1002`, `sleep_timer_completion_channel`) and displays an outcome card in the app.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as Timer screen
+    participant Service as Timer service
+    participant Android as Android media system
+    participant Notice as Notification system
 
----
+    User->>UI: Select duration and Start
+    UI->>Service: Start timer
+    Service-->>UI: Timer state / remaining time
+    Note over Service: Countdown continues while app is backgrounded
+    Service->>Service: Countdown reaches zero
+    Service->>Android: Request pause for active media session
+    Android-->>Service: Platform/session-dependent result
+    Service->>Notice: Post completion notification
+    Notice-->>User: Timer finished
+```
 
-## 🔒 Required Android Permissions & Security
+> Android media control depends on the active app/session, system version, and granted access. The app requests a pause; it cannot guarantee control of every possible player or device configuration.
 
-| Permission | Purpose | User Disclosure / Scope |
+## 🧭 Architecture
+
+```mermaid
+flowchart LR
+    U[User] <--> UI[Activity / XML UI]
+    UI --> T[Timer logic]
+    T --> S[Background timer service]
+    S --> M[Android media-session integration]
+    S --> N[Completion notification]
+    P[Android permissions/settings] -. enables access .-> M
+    P -. notification access .-> N
+```
+
+**Design principles**
+- Keep the timer workflow local to Android.
+- Separate the timer screen from background timing work.
+- Use Android's permission and media-session mechanisms rather than a custom server.
+- Treat media pause as a best-effort platform integration, not a universal guarantee.
+
+## 📊 Timer presets
+
+```mermaid
+xychart-beta
+    title "Available quick presets"
+    x-axis ["15 min", "30 min", "45 min", "60 min", "120 min"]
+    y-axis "Minutes" 0 --> 120
+    bar [15, 30, 45, 60, 120]
+```
+
+Presets are shortcuts; custom duration is available when a different interval is needed.
+
+## 🧪 Test evidence
+
+### Reported manual test matrix
+
+The following results were reported by the developer during manual testing. Marked **PASS (reported)** means the developer says the check passed; it does not mean an external tester independently reproduced it.
+
+| # | Test | Reported result |
+|---:|---|---|
+| 1 | App opens without crashing | PASS (reported) |
+| 2 | Countdown starts and advances | PASS (reported) |
+| 3 | Pause works | PASS (reported) |
+| 4 | Resume works | PASS (reported) |
+| 5 | Cancel works | PASS (reported) |
+| 6 | Media access can be enabled | PASS (reported) |
+| 7 | Manual media pause works | PASS (reported) |
+| 8 | Countdown remains accurate with screen locked | PASS (reported) |
+| 9 | Automatic pause at expiry works with Spotify | PASS (reported) |
+| 10 | Automatic pause at expiry works with YouTube | PASS (reported) |
+| 11 | Automatic pause at expiry works with Amazon Music | PASS (reported) |
+| 12 | Completion notification appears only once | PASS (reported) |
+| 13 | App handles notification permission denial | PASS (reported) |
+| 14 | State is correct after leaving and reopening the app | PASS (reported) |
+| 15 | Five-minute timer completes with default battery settings | PASS (reported) |
+
+### Test coverage graph
+
+```mermaid
+xychart-beta
+    title "Developer-reported manual checks"
+    x-axis ["Timer controls", "Locked screen", "Media pause", "Notifications", "Reopen state"]
+    y-axis "Checks reported passed" 0 --> 4
+    bar [3, 2, 3, 2, 1]
+```
+
+This graph groups the reported checks by theme for readability; it is **not** a formal code-coverage percentage or an automated test metric.
+
+### Add reproducible proof
+
+For a portfolio-quality evidence trail, add these real artifacts to the repository and update the paths below:
+
+| Evidence | Suggested file path | What it demonstrates |
 |---|---|---|
-| `android.permission.FOREGROUND_SERVICE` | Runs the countdown service when minimized | Low-priority persistent status notification |
-| `android.permission.FOREGROUND_SERVICE_SPECIAL_USE` | Complies with Android 14 (API 34) Foreground Service type policies | Declared with `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` in manifest |
-| `android.permission.POST_NOTIFICATIONS` | Displays timer countdown and completion alerts on Android 13+ | Requested dynamically on first timer start |
-| `android.permission.USE_EXACT_ALARM` / `SCHEDULE_EXACT_ALARM` | Ensures timely wake-up when phone enters deep Doze mode | Guarded via `canScheduleExactAlarms()` with graceful fallback |
-| `android.permission.WAKE_LOCK` | Briefly wakes device upon deadline arrival to execute pause | Released immediately after pause dispatch |
-| `BIND_NOTIFICATION_LISTENER_SERVICE` | Required by Android `MediaSessionManager` to access external playback | Granted once by user via system Settings toggle |
+| Main timer screen | `docs/screenshots/timer-home.png` | App UI and duration selection |
+| Running countdown | `docs/screenshots/timer-running.png` | Timer in progress |
+| Notification | `docs/screenshots/completion-notification.png` | Completion alert |
+| Media pause test | `docs/screenshots/media-paused.png` | Player state after expiry |
+| Full test recording | `docs/videos/end-to-end-test.mp4` | Start → lock screen → expiry → pause |
+| Build proof | `docs/build/build-success.png` | Android Studio successful build |
 
-> **Privacy Guarantee**: `android.permission.INTERNET` is **NOT requested**. Smart Sleep Timer cannot connect to external servers or send user data anywhere.
+**Do not add placeholder images and describe them as proof.** Capture genuine screenshots or a screen recording on your device, remove private notifications/personal information, and commit the artifacts before linking them here.
 
----
+Example once files exist:
 
-## 🚀 How to Build and Install the APK
+```markdown
+![Timer home screen](docs/screenshots/timer-home.png)
+![Completion notification](docs/screenshots/completion-notification.png)
+```
 
-### Prerequisites
-- [Android Studio](https://developer.android.com/studio) (Hedgehog, Iguana, or newer)
-- Java Development Kit (JDK 17)
-- Android SDK Platform 34 installed via Android Studio SDK Manager
-- An Android device running Android 8.0 (API 26) or higher, with Developer Options and USB Debugging enabled (or an Android Emulator)
+### Useful edge cases to verify again before release
 
-### Step 1: Open the Project in Android Studio
-1. Launch Android Studio.
-2. Select **File > Open...** and navigate to:
-   ```
-   c:\Users\ashri\SpringNew\AutoStopMedia
-   ```
-3. Allow Gradle to synchronize dependencies.
+- Revoke media/notification access while the app is not running.
+- Let the timer expire when no media player is active.
+- Force-stop the app and check the documented behavior after reopening.
+- Reboot the phone and verify whether any timer restoration is intended.
+- Test battery saver / background restrictions on more than one Android device.
+- Test a **release-signed APK**, not only the debug build.
 
-### Step 2: Build the Release APK
-1. In Android Studio, go to the top menu and select **Build > Build Bundle(s) / APK(s) > Build APK(s)**.
-2. Alternatively, open the **Terminal** tab in Android Studio and run:
+## 🔐 Permissions
+
+Actual permission declarations can vary with the source code and target SDK. Verify the final manifest before publishing this table as a literal manifest audit.
+
+| Permission / access | Why it may be needed | User control |
+|---|---|---|
+| Notification permission (Android versions that require it) | Display timer completion notification | Can be denied in Android settings / prompt |
+| Notification listener / media notification access, if implemented | Read active media notifications/session information for media control | Must be enabled by the user in system settings |
+| Foreground-service permission/type, if declared by the app | Keep the timer service running according to Android rules | Governed by Android OS policy |
+
+**Privacy statement:** The intended timer workflow does not need a backend or internet access. Confirm the final `AndroidManifest.xml` and dependency list before making a definitive security claim for a published build.
+
+## 🛠️ Build and install
+
+### Requirements
+
+- Android Studio
+- A compatible JDK configured by Android Studio / Gradle
+- Android SDK components required by the project
+- An Android device or emulator
+
+### Open the project
+
+1. Clone the repository:
+
    ```bash
-   ./gradlew assembleRelease
-   ```
-3. When the build completes, Android Studio will display a notification saying `APK(s) generated successfully`.
-4. The generated release APK will be located at:
-   ```
-   app/build/outputs/apk/release/app-release.apk
+   git clone https://github.com/ashrithBalaji456/Smart_Sleep-_Timer.git
+   cd Smart_Sleep-_Timer
    ```
 
-### Step 3: Install on Your Android Phone
+2. Open the project folder in Android Studio.
+3. Allow Gradle sync to finish.
+4. Connect an Android device or start an emulator.
+5. Run the `app` configuration.
 
-#### Option A: Direct Install via Android Studio (Recommended)
-1. Connect your Android phone via USB.
-2. Select your device in the toolbar dropdown.
-3. Click **Run 'app'** (`Shift + F10`).
+### Build a debug APK
 
-#### Option B: Install via ADB Command Line
+**Windows PowerShell:**
+
+```powershell
+.\gradlew.bat assembleDebug
+```
+
+**macOS / Linux:**
+
 ```bash
-adb install -r app/build/outputs/apk/release/app-release.apk
+./gradlew assembleDebug
 ```
 
-#### Option C: Sideload via Phone Storage
-1. Copy `app-release.apk` to your phone via USB cable, Google Drive, or local file sharing.
-2. On your phone, open your **Files** app and tap `app-release.apk`.
-3. If prompted, allow "Install from Unknown Sources" for your file manager.
-4. Tap **Install** and then **Open**.
+Expected output location:
 
-### Step 4: First-Time Setup on Device
-1. Open **Smart Sleep Timer**.
-2. Scroll to the **Media Playback Control** card and tap **Enable Notification Access**.
-3. Toggle on **Smart Sleep Timer** in the Android system settings page and tap **Allow**.
-4. Return to the app. The badge will update to `ACCESS GRANTED`.
-
----
-
-## 🧪 Test Results & Regression Matrix
-
-All 32 automated unit tests pass with zero errors:
-
-```
-JUnit version 4.13.2
-................................
-Time: 0.07s
-
-OK (32 tests)
+```text
+app/build/outputs/apk/debug/app-debug.apk
 ```
 
-| Test Suite | Tests | Result | Verified Capabilities |
-|---|---|:---:|---|
-| `CustomDurationValidationTest` | 5 | ✅ PASS | 0m rejection, 24h ceiling, valid durations, quick increment rollover |
-| `TimeFormatterTest` | 5 | ✅ PASS | mm:ss, hh:mm:ss, single-digit padding, zero-time formatting |
-| `DeadlineCalculationTest` | 4 | ✅ PASS | Monotonic clock addition, pause remaining subtraction, boundary limits |
-| `MediaControlResultTest` | 13 | ✅ PASS | Factory outcomes, display message accuracy, unconfirmed state safety |
-| `CompatibilityMatrixTest` | 5 | ✅ PASS | Truthful pause guarantees, missing access handling, state transitions |
+The exact path can differ if the module or build variants are changed.
 
-### Real-Device Verification Checklist
+### Install on a connected Android device
 
-| Test Scenario | Verification Status | Notes / Instructions |
-|---|:---:|---|
-| Presets (15m, 30m, 45m, 1h, 2h) | ✅ Verified | Tapping chip instantly updates countdown and progress ring |
-| Quick Custom Chips (+5m, +15m, +30m, +1h) | ✅ Verified | Automatic rollover (e.g. 45m + 30m = 1h 15m), keyboard `actionDone` |
-| Start, Pause, Resume, Cancel | ✅ Verified | State transitions update badge and action buttons without race conditions |
-| ⚡ 30-Second Quick Verification Timer | ✅ Verified | Verifies complete cycle in 30 seconds |
-| Screen Lock / Background Timing | 📱 Physical Device | AlarmManager exact wakeup scheduled; requires device |
-| Spotify (`com.spotify.music`) Auto-Pause | 📱 Physical Device | Verified via MediaController contracts; physical test required |
-| YouTube (`com.google.android.youtube`) Auto-Pause | 📱 Physical Device | Verified via MediaController contracts; physical test required |
-| Amazon Music (`com.amazon.mp3`) Auto-Pause | 📱 Physical Device | Verified via MediaController contracts; physical test required |
-| No Active Media Session | ✅ Verified | Returns `TIMER_COMPLETED_NO_SESSION` without crashing |
-| Notification Permission Denied | ✅ Verified | App continues countdown; notification fails silently without crash |
+With USB debugging enabled and the device authorized:
+
+```bash
+adb devices
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Only install APKs you built yourself or trust. Do not disable Android security protections to install an unknown APK.
+
+### Create a signed release APK
+
+1. In Android Studio, open **Build → Generate Signed Bundle / APK**.
+2. Choose **APK** and continue.
+3. Select an existing signing key or create a new keystore.
+4. Choose the release build variant and finish.
+5. Test the resulting release APK on the target device.
+6. Keep the keystore and passwords private; **never commit them to GitHub**.
+
+> Debug APKs are intended for development. Use a signed release build for distribution.
+
+## 🗺️ Six-phase build journey
+
+The project was developed in the requested six phases.
+
+```mermaid
+flowchart LR
+    P1["Phase 1<br/>Timer foundation"] --> P2["Phase 2<br/>Media integration"]
+    P2 --> P3["Phase 3<br/>Background reliability"]
+    P3 --> P4["Phase 4<br/>Automatic pause + notice"]
+    P4 --> P5["Phase 5<br/>UI + compatibility"]
+    P5 --> P6["Phase 6<br/>Testing + release"]
+    classDef phase fill:#172554,stroke:#60a5fa,color:#fff
+    class P1,P2,P3,P4,P5,P6 phase
+```
+
+| Phase | Focus | Outcome |
+|---|---|---|
+| 1 | Timer foundation | Presets, custom duration, start/pause/resume/cancel |
+| 2 | Media integration | Android media access and manual pause workflow |
+| 3 | Background reliability | Countdown while the app is not in the foreground |
+| 4 | Expiry behavior | Automatic media-pause request and completion notification |
+| 5 | Polish and compatibility | UI refinement, permission/error handling, device testing |
+| 6 | Verification and delivery | End-to-end tests, release build, APK delivery |
+
+## 🧰 Technology stack
+
+- **Java** — application logic
+- **XML layouts** — Android user interface
+- **Android SDK** — services, notifications, media integration, and permissions
+- **Gradle** — build and dependency management
+- **Android Studio** — development and build environment
+
+No server-side framework or backend service is part of the intended design.
+
+## 🧑‍💻 Portfolio summary
+
+**Smart Sleep Timer — Native Android App**
+
+Built a native Android sleep timer using Java and XML with configurable countdown presets, custom duration, pause/resume/cancel controls, background timing, media-pause integration, and completion notifications. Tested the core timer workflow and media pausing with Spotify, YouTube, and Amazon Music on an iQOO Neo7 Pro running Android 16 (developer-reported manual results). Designed the app to work locally without a required backend.
+
+### Resume bullet
+
+> Developed a native Android Sleep Timer using Java, XML, and Gradle, implementing configurable countdowns, background timer behavior, media-session pause integration, and completion notifications; validated key workflows through on-device manual testing.
+
+## 🤝 Contributing
+
+1. Fork the repository.
+2. Create a feature branch.
+3. Keep changes focused and test on a device/emulator.
+4. Update this README when behavior, permissions, or supported Android versions change.
+5. Open a pull request describing the change and the test evidence.
+
+## 📄 License
+
+No license has been specified here. Add a `LICENSE` file before presenting the project as open source, and choose a license whose terms you understand.
 
 ---
 
-## 📱 Screenshots
+<div align="center">
 
-| Main Screen (Ready) | Custom Duration Dialog | Active Countdown (Running) | Timer Completed |
-|:---:|:---:|:---:|:---:|
-| *(Screenshot placeholder)* | *(Screenshot placeholder)* | *(Screenshot placeholder)* | *(Screenshot placeholder)* |
+**Built for quieter nights and a cleaner sleep routine. 🌙**
 
----
-
-## ⚠️ Known Limitations
-
-1. **Vendor-Specific Battery Killers**: Certain Android distributions (e.g. Xiaomi MIUI/HyperOS, Huawei EMUI, Samsung One UI) enforce aggressive background task management. Users on these devices should set Smart Sleep Timer's battery usage to "Unrestricted" in app settings.
-2. **Web Browser Audio (Chrome / Firefox)**: Mobile web browsers often do not expose full `MediaSession` metadata or may ignore `ACTION_PAUSE` commands when backgrounded.
-3. **Protected YouTube Lock-Screen Playback**: YouTube free tier halts audio automatically when the screen locks, unless the user possesses YouTube Premium or uses a compatible background player.
-
----
-
-## 🔮 Future Improvements
-
-*(Deferred to post-v1.0 releases)*
-- **Audio Fade-Out**: Gradually ramp down device master audio volume across the final 60 seconds before issuing the pause command.
-- **Shake to Extend**: Accelerometer-based gesture recognition allowing users to shake their phone to add 15 minutes without turning on the bright screen.
-- **Bluetooth Disconnect**: Optional toggle to disconnect connected Bluetooth headphones/speakers after pausing audio to preserve headphone battery.
-- **Sleep History Logs**: Local stats recording sleep timer usage frequency and favourite durations.
-
----
-
-## 💼 Portfolio & Resume Summary
-
-**Project**: Smart Sleep Timer — Native Android Application  
-**Role**: Lead Android Engineer & Architecture Specialist  
-
-- Designed and built a standalone native Android application from scratch using **Java 17**, **XML Layouts**, **Material Components**, and **Android Architecture Components (MVVM)**.
-- Implemented a drift-free monotonic background timer engine backed by an Android **Foreground Service** (`specialUse` subtype), native **Notification Chronometer**, and **AlarmManager exact wakeups** to ensure 100% timing accuracy across deep Android Doze states.
-- Engineered cross-application media playback control leveraging Android's **`MediaSessionManager`**, **`MediaController`**, and **`NotificationListenerService`** APIs to discover and pause active third-party media players (Spotify, YouTube, Amazon Music).
-- Developed a custom canvas-rendered **`CircularTimerView`** with matrix-rotated gradient shaders and smooth interpolation.
-- Achieved a 100% test pass rate across 32 unit tests with complete lifecycle resilience, zero memory leaks, and a privacy-first zero-network-permission footprint.
+</div>
