@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Backgrounds -->
+    <color name="bg_dark">#0B0F19</color>
+    <color name="bg_dark_gradient_top">#111827</color>
+    <color name="bg_dark_gradient_bottom">#070A10</color>
+    <color name="card_surface">#161F33</color>
+    <color name="card_surface_stroke">#24304D</color>
+    <color name="card_surface_elevated">#1E2942</color>
+
+    <!-- Accents -->
+    <color name="primary_accent">#00E5FF</color>
+    <color name="primary_accent_variant">#00B0FF</color>
+    <color name="secondary_accent">#7C4DFF</color>
+    <color name="secondary_accent_variant">#651FFF</color>
+
+    <!-- Typography -->
+    <color name="text_primary">#F8FAFC</color>
+    <color name="text_secondary">#94A3B8</color>
+    <color name="text_tertiary">#64748B</color>
+
+    <!-- Circular Timer Progress -->
+    <color name="circle_track">#1C2538</color>
+    <color name="circle_progress_start">#7C4DFF</color>
+    <color name="circle_progress_end">#00E5FF</color>
+
+    <!-- Status Indicators -->
+    <color name="status_ready">#38BDF8</color>
+    <color name="status_ready_bg">#13283B</color>
+    <color name="status_running">#00E5FF</color>
+    <color name="status_running_bg">#093542</color>
+    <color name="status_paused">#FBBF24</color>
+    <color name="status_paused_bg">#3D2C0D</color>
+    <color name="status_completed">#34D399</color>
+    <color name="status_completed_bg">#0E382A</color>
+
+    <!-- Button & Chip states -->
+    <color name="chip_bg_unselected">#162035</color>
+    <color name="chip_bg_selected">#00E5FF</color>
+    <color name="chip_stroke_unselected">#223252</color>
+    <color name="chip_text_unselected">#CBD5E1</color>
+    <color name="chip_text_selected">#070B14</color>
+
+    <!-- Action Buttons -->
+    <color name="btn_start_bg">#00E5FF</color>
+    <color name="btn_start_text">#070B14</color>
+    <color name="btn_pause_bg">#FBBF24</color>
+    <color name="btn_pause_text">#070B14</color>
+    <color name="btn_resume_bg">#34D399</color>
+    <color name="btn_resume_text">#070B14</color>
+    <color name="btn_cancel_bg">#25304B</color>
+    <color name="btn_cancel_text">#EF4444</color>
+    <color name="btn_cancel_stroke">#3B4B70</color>
+
+    <!-- Dialog Colors -->
+    <color name="dialog_bg">#161F33</color>
+    <color name="edit_text_bg">#0E1524</color>
+</resources>

@@ -1,0 +1,28 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.SmartSleepTimer" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Primary brand color. -->
+        <item name="colorPrimary">@color/primary_accent</item>
+        <item name="colorPrimaryVariant">@color/primary_accent_variant</item>
+        <item name="colorOnPrimary">@color/bg_dark</item>
+
+        <!-- Secondary brand color. -->
+        <item name="colorSecondary">@color/secondary_accent</item>
+        <item name="colorSecondaryVariant">@color/secondary_accent_variant</item>
+        <item name="colorOnSecondary">@color/text_primary</item>
+
+        <!-- Status bar and Navigation bar color. -->
+        <item name="android:statusBarColor">@color/bg_dark_gradient_top</item>
+        <item name="android:navigationBarColor">@color/bg_dark_gradient_bottom</item>
+        <item name="android:windowBackground">@color/bg_dark</item>
+
+        <!-- Night mode defaults -->
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+    </style>
+
+    <!-- Custom Dialog Theme -->
+    <style name="CustomDialogTheme" parent="Theme.MaterialComponents.DayNight.Dialog.Alert">
+        <item name="android:background">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+</resources>

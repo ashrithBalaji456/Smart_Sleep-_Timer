@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Smart Sleep Timer</string>
+    <string name="app_tagline">Drift off peacefully while your audio plays</string>
+
+    <!-- Presets -->
+    <string name="preset_header">Select Duration</string>
+    <string name="preset_15m">15m</string>
+    <string name="preset_30m">30m</string>
+    <string name="preset_45m">45m</string>
+    <string name="preset_1h">1h</string>
+    <string name="preset_2h">2h</string>
+    <string name="preset_custom">Custom</string>
+    <string name="preset_30s_test">30s Test</string>
+
+    <!-- Timer States -->
+    <string name="status_ready">Ready</string>
+    <string name="status_running">Running</string>
+    <string name="status_paused">Paused</string>
+    <string name="status_completed">Completed</string>
+
+    <!-- Actions -->
+    <string name="action_start">Start</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_resume">Resume</string>
+    <string name="action_cancel">Cancel</string>
+
+    <!-- Dialog Strings -->
+    <string name="dialog_custom_title">Set Custom Duration</string>
+    <string name="dialog_custom_subtitle">Choose how long before the timer finishes</string>
+    <string name="hours_label">Hours</string>
+    <string name="minutes_label">Minutes</string>
+    <string name="hint_hours">0</string>
+    <string name="hint_minutes">30</string>
+    <string name="dialog_apply">Apply Duration</string>
+    <string name="dialog_cancel">Cancel</string>
+    <string name="error_zero_duration">Duration must be at least 1 minute or 10 seconds.</string>
+    <string name="error_invalid_number">Please enter valid numeric values.</string>
+    <string name="error_exceeds_max">Maximum timer duration is 24 hours.</string>
+    <string name="timer_completed_toast">Sleep timer completed!</string>
+</resources>

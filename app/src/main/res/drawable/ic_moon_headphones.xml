@@ -1,0 +1,42 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+
+    <!-- Ambient Stars -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M14,14 L15.2,16.8 L18,18 L15.2,19.2 L14,22 L12.8,19.2 L10,18 L12.8,16.8 Z" />
+
+    <path
+        android:fillColor="#7C4DFF"
+        android:pathData="M48,10 L48.8,11.8 L51,12.5 L48.8,13.2 L48,15 L47.2,13.2 L45,12.5 L47.2,11.8 Z" />
+
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M52,44 L52.6,45.4 L54,46 L52.6,46.6 L52,48 L51.4,46.6 L50,46 L51.4,45.4 Z" />
+
+    <!-- Crescent Moon -->
+    <path
+        android:fillColor="#7C4DFF"
+        android:pathData="M34,16 C25.16,16 18,23.16 18,32 C18,40.84 25.16,48 34,48 C37.5,48 40.73,46.88 43.38,44.97 C37.89,44.42 33.5,39.75 33.5,34 C33.5,28.25 37.89,23.58 43.38,23.03 C40.73,21.12 37.5,16 34,16 Z" />
+
+    <!-- Headphone Arc / Band -->
+    <path
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M20,34 C20,24 25.5,18 34,18 C42.5,18 48,24 48,34" />
+
+    <!-- Left Ear Cup -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M17,32 C15.9,32 15,32.9 15,34 L15,40 C15,41.1 15.9,42 17,42 L21,42 C22.1,42 23,41.1 23,40 L23,34 C23,32.9 22.1,32 21,32 Z" />
+
+    <!-- Right Ear Cup -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M47,32 C45.9,32 45,32.9 45,34 L45,40 C45,41.1 45.9,42 47,42 L51,42 C52.1,42 53,41.1 53,40 L53,34 C53,32.9 52.1,32 51,32 Z" />
+</vector>
