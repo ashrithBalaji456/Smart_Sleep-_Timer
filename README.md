@@ -1,17 +1,27 @@
-# Smart Sleep Timer — Phase 1
+# Smart Sleep Timer — Phase 2: Android Media Playback Control
 
-A modern, calming night-themed Android application that lets users set a sleep timer for listening to music, podcasts, or other audio. 
+A modern, calming night-themed Android application that lets users set a sleep timer and inspect/control active media sessions across external media applications.
 
-This repository contains **Phase 1: App Foundation and Functional Timer**. Media control and background services will be added in subsequent phases.
+This repository contains **Phase 1 (Timer Foundation)** and **Phase 2 (Android Media Playback Control)**. The overall project consists of exactly 6 phases.
 
 ---
 
-## 🌙 Visual Identity & UI Design
-- **Theme**: Calming dark night-sky aesthetics with deep slate/navy surfaces (`#0B0F19`, `#161F33`), soft luminescent cyan accents (`#00E5FF`), and warm lunar amber/emerald indicators.
-- **Branding**: Custom vector identity featuring a glowing crescent moon resting with over-ear headphones and night stars.
-- **Display**: High-contrast, large countdown display (`HH:MM:SS` or `MM:SS`) centered inside a custom animated circular arc indicator.
-- **Presets**: 15m, 30m, 45m, 1h, 2h, a custom duration picker, plus a **30-second quick-test button** for rapid verification.
-- **States**: Dynamic pill badge reflecting `READY`, `RUNNING`, `PAUSED`, or `COMPLETED`.
+## 🌙 Overview of Implemented Phases
+
+### Phase 1: App Foundation and Functional Timer (Preserved)
+- Night-sky visual identity with custom vector branding (`ic_moon_headphones.xml`).
+- Timer presets: 15m, 30m, 45m, 1h, 2h, and custom duration picker (Hours & Minutes).
+- Large countdown display and custom animated circular arc indicator (`CircularTimerView`).
+- Start, Pause, Resume, and Cancel state machine with 300ms click debounce.
+- Monotonic wall-clock calculations (`SystemClock.elapsedRealtime()`) and configuration change survival.
+- **⚡ 30-Second Quick Verification Timer** button for rapid testing.
+
+### Phase 2: Android Media Playback Control (New)
+- **Media Session Discovery**: Evaluates Android's `MediaSessionManager` and `MediaController` APIs.
+- **Notification Access Integration**: Declares and implements `MediaNotificationListenerService` as required by Android security to inspect active external sessions.
+- **Application Identification**: Resolves package names and displays friendly names (Spotify, YouTube, Amazon Music, etc.).
+- **Transport Controls**: Tests pause commands via `MediaController.getTransportControls().pause()` and media key event fallbacks.
+- **Media Control Test Section**: Dedicated UI card showing permission status, detected player, session state, `Refresh Sessions`, and `Test Pause Audio`.
 
 ---
 
@@ -19,77 +29,104 @@ This repository contains **Phase 1: App Foundation and Functional Timer**. Media
 
 ```
 app/src/main/java/com/smartsleeptimer/app/
-├── MainActivity.java                // Primary Activity; observes LiveData & binds UI
-├── model/
-│   └── TimerState.java              // Enum: READY, RUNNING, PAUSED, COMPLETED
-├── engine/
-│   ├── SleepTimerEngine.java        // Drift-free wall-clock timer engine (SystemClock.elapsedRealtime)
-│   └── TimerListener.java           // Callback contract for ticks, state transitions, & completion
+├── MainActivity.java                       # Main Activity coordinating Timer UI & Media Test Card
+├── media/                                  # [PHASE 2] Media Control Package
+│   ├── MediaAccessHelper.java              # Permission checks & Settings Intent creator
+│   ├── MediaNotificationListenerService.java # Required system service for active session access
+│   ├── MediaSessionInfo.java               # Model for detected app, state, & track info
+│   ├── MediaControlResult.java             # Result model with readable status messages
+│   └── MediaControlManager.java            # Manages MediaSessionManager, controllers, & pause logic
 ├── viewmodel/
-│   └── SleepTimerViewModel.java     // Android ViewModel surviving rotation & debounce logic
+│   ├── SleepTimerViewModel.java            # Phase 1: Timer state & tick LiveData
+│   └── MediaControlViewModel.java          # [PHASE 2] Media session & permission LiveData
+├── engine/
+│   ├── SleepTimerEngine.java               # Phase 1: Monotonic timer engine
+│   └── TimerListener.java                  # Phase 1: Listener contract
 ├── ui/
-│   ├── CircularTimerView.java       // Custom Canvas view drawing the dual-color gradient ring
-│   └── CustomDurationDialog.java    // Input dialog for hours & minutes with strict validation
+│   ├── CircularTimerView.java              # Phase 1: Gradient arc custom view
+│   └── CustomDurationDialog.java           # Phase 1: Validated duration picker dialog
+├── model/
+│   └── TimerState.java                     # READY, RUNNING, PAUSED, COMPLETED
 └── util/
-    └── TimeFormatter.java           // Formatting utilities (HH:MM:SS, label generator, validation)
+    └── TimeFormatter.java                  # Time and duration formatting utility
 ```
 
-### Key Architectural Decisions:
-1. **Drift-Free Time Calculation**: Rather than subtracting 1 second on each tick (which drifts when the thread lags or the screen turns off), `SleepTimerEngine` computes `endTimeRealtime = SystemClock.elapsedRealtime() + remainingMillis`. Every tick recalculates remaining time against `SystemClock.elapsedRealtime()`.
-2. **Configuration Change Survival**: `SleepTimerViewModel` retains the timer instance and LiveData streams across screen rotations or Activity recreations. Returning to the app triggers `viewModel.refreshTimer()` in `onResume()`.
-3. **Debounced User Actions**: Rapid taps on "Start", "Pause", or "Resume" are debounced and checked against the state machine to prevent duplicate timers or concurrent countdown loops.
-4. **Input Validation**: The custom duration dialog validates both hours and minutes, disallowing empty values, negative values, 0-minute durations, or durations over 24 hours.
+---
+
+## 🔐 Android Permissions & Setup Explanation
+
+### Why Notification Access is Required
+Android restricts applications from inspecting or controlling media sessions owned by other applications. Starting in Android 5.0 (API 21) and enforced in subsequent versions:
+1. `MediaSessionManager.getActiveSessions(ComponentName)` **strictly requires** a registered and enabled `NotificationListenerService`.
+2. Attempting to call `getActiveSessions` without this special access throws a `SecurityException`.
+3. To enable this, the user must navigate to **Android Settings > Notification Access (Special App Access)** and toggle on **Smart Sleep Timer**.
+4. The application includes a one-click button in the Media Control section (**"Enable Notification Access"**) that directly opens the appropriate system settings screen.
 
 ---
 
-## 🚀 How to Open and Run in Android Studio
+## 🧪 Detailed Manual Testing Procedure (Phase 2)
 
-1. **Launch Android Studio** (Hedgehog, Iguana, Jellyfish, or newer).
-2. Click **Open** (or **File > Open**) and select this project directory:
-   ```
-   C:\Users\ashri\SpringNew\AutoStopMedia
-   ```
-3. Allow Android Studio to sync the Gradle project automatically.
-4. Select a virtual device (Emulator) or your physical Android phone from the device dropdown.
-5. Click the green **Run (Shift + F10)** button.
+Follow these steps on an Android device or emulator:
 
----
-
-## 📱 How to Install and Test on a Physical Android Phone
-
-1. **Enable Developer Options on your phone**:
-   - Go to **Settings > About Phone**.
-   - Tap **Build Number** 7 times until you see "You are now a developer!".
-2. **Enable USB Debugging**:
-   - Go to **Settings > System > Developer Options**.
-   - Toggle **USB Debugging** ON.
-3. **Connect your phone to your PC via USB cable**:
-   - Accept the "Allow USB debugging?" authorization prompt on your phone screen.
-4. In Android Studio, your phone will appear in the target device selector.
-5. Click **Run** to compile and automatically install the app on your phone.
-
-*(Alternatively, to generate a standalone APK: select **Build > Build Bundle(s) / APK(s) > Build APK(s)** in Android Studio. The output `.apk` file will be generated in `app/build/outputs/apk/debug/` and can be transferred to your phone).*
-
----
-
-## 🧪 Verification & Acceptance Test Checklist
-
-You can test all scenarios using the built-in **⚡ 30-Second Quick Verification Timer**:
-
-| Test Scenario | Action | Expected Result |
-|---|---|---|
-| **1. Countdown** | Select a preset (e.g. 30s Quick Test) and tap **Start** | Countdown begins, ring arc decreases smoothly, status changes to `RUNNING`. |
-| **2. Pause** | While running, tap **Pause** | Remaining time stops decreasing, status badge changes to `PAUSED`, **Resume** button appears. |
-| **3. Resume** | Tap **Resume** | Countdown resumes exactly where it paused, status changes back to `RUNNING`. |
-| **4. Cancel** | Tap **Cancel** | Timer immediately stops, status changes to `READY`, countdown resets to the selected duration. |
-| **5. Expiration** | Let 30s timer reach zero | Displays `COMPLETED`, remaining time shows `00:00`, toast appears, and Start button resets. |
-| **6. Custom Duration Validation** | Tap **Custom**, enter `0` hours and `0` mins, or leave blank | Error message displayed; dialog rejects invalid input. |
-| **7. Orientation / Lifecycle** | Start countdown and rotate phone | Timer continues accurately without resetting or skipping ticks. |
-| **8. Double-Tap Prevention** | Rapidly tap **Start** multiple times | Only one timer runs; duplicate timers are prevented. |
+1. **Initial State (No Permission)**:
+   - Launch Smart Sleep Timer.
+   - Scroll down to the **Media Playback Control (Phase 2 Test)** card.
+   - Verify the badge shows `Access Required` (Amber) and an explanation box appears.
+2. **Settings Navigation**:
+   - Tap **Enable Notification Access**.
+   - Verify that Android opens the **Device & app notifications** (or Notification Access) settings page.
+3. **Grant Permission**:
+   - Locate and select **Smart Sleep Timer** (or "Smart Sleep Timer Media Controller").
+   - Toggle **Allow notification access** ON and confirm the system warning.
+4. **Return and Verify State Update**:
+   - Return to Smart Sleep Timer.
+   - In `onResume()`, the app automatically detects the granted permission: the badge changes to `Access Granted` (Green) and the explanation box disappears.
+5. **Test with Spotify**:
+   - Open Spotify and start playing any song or podcast.
+   - Return to Smart Sleep Timer and tap **Refresh Sessions**.
+   - Verify that **Detected Player** displays `Spotify` and the session state shows `Playing`.
+   - Tap **Test Pause Audio**.
+   - Verify that the result displays `Pause command sent to Spotify` and playback pauses.
+6. **Test with YouTube / YouTube Music**:
+   - Start video or audio playback in YouTube or YouTube Music.
+   - Return to Smart Sleep Timer and tap **Refresh Sessions**.
+   - Verify `YouTube` / `YouTube Music` is detected.
+   - Tap **Test Pause Audio** and verify the pause behavior.
+7. **Test with Amazon Music / Other Media Players**:
+   - Repeat the test with Amazon Music, Apple Music, or SoundCloud.
+8. **Test with No Audio Playing**:
+   - Ensure all media applications are closed or paused.
+   - Tap **Refresh Sessions**.
+   - Verify the UI displays `No active media session found`.
+9. **Test Revoking Permission**:
+   - Go to Android Settings and revoke notification access for Smart Sleep Timer.
+   - Return to the app.
+   - Tap **Test Pause Audio** or **Refresh Sessions**.
+   - Verify the app handles the revocation gracefully without crashing, displaying `Media access required`.
+10. **Verify Phase 1 Regression Safety**:
+    - Tap **30-Second Quick Verification Timer** and tap **Start**.
+    - Verify countdown, Pause, Resume, and Cancel all continue to function flawlessly alongside media controls.
 
 ---
 
-## 🔒 Phase Boundaries (Out of Scope for Phase 1)
-- **Spotify / YouTube API integration**: Deferred to Phase 2.
-- **MediaSessionManager & Audio Focus pause**: Deferred to Phase 2.
-- **Foreground Service & Persistent Lock Screen Notification**: Deferred to Phase 2.
+## ⚠️ Media Application Behavior & Known Limitations
+
+1. **Third-Party App Implementation Differences**:
+   - **Spotify**: Fully exposes standard `MediaSession` and responds immediately to `TransportControls.pause()`.
+   - **YouTube**: In standard (free) YouTube, playback may pause automatically when backgrounded unless YouTube Premium / PiP is active. When background playback is active, it responds to transport pause commands.
+   - **Amazon Music / Apple Music**: Expose active media sessions when actively playing audio and accept standard pause commands.
+2. **Command Dispatch vs. Playback Confirmation**:
+   - Android's `MediaController.getTransportControls().pause()` is a one-way command dispatched to the target session. The actual pausing of audio output depends on whether the third-party application honors the command.
+3. **Emulator vs. Physical Device**:
+   - Emulators without Google Play Store or third-party streaming apps installed cannot verify real-world audio session control. Testing on a physical Android phone with genuine music apps is strongly recommended.
+
+---
+
+## 🔒 Strict Phase Boundaries (Phase 2 Scope)
+
+- **Implemented**: MediaSession discovery, NotificationListenerService, app resolution, transport pause commands, and manual test interface.
+- **Deferred to Later Phases**:
+  - Timer-triggered automatic media pausing (Phase 3+).
+  - Continuous foreground service for long background countdowns.
+  - Final notification media controls & lock screen experience.
+  - Automatic device locking.

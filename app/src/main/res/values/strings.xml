@@ -38,4 +38,18 @@
     <string name="error_invalid_number">Please enter valid numeric values.</string>
     <string name="error_exceeds_max">Maximum timer duration is 24 hours.</string>
     <string name="timer_completed_toast">Sleep timer completed!</string>
+
+    <!-- Phase 2: Media Control Test Section -->
+    <string name="notification_listener_service_label">Smart Sleep Timer Media Controller</string>
+    <string name="media_section_title">Media Playback Control (Phase 2 Test)</string>
+    <string name="media_access_label">Media Access:</string>
+    <string name="media_access_granted">Access Granted</string>
+    <string name="media_access_required">Access Required</string>
+    <string name="btn_grant_media_access">Enable Notification Access</string>
+    <string name="media_permission_explanation">Android requires Notification Access so this app can discover active media sessions and request external players (Spotify, YouTube, Amazon Music) to pause.</string>
+    <string name="detected_app_label">Detected Player:</string>
+    <string name="no_media_detected">No active media session found</string>
+    <string name="btn_refresh_sessions">Refresh Sessions</string>
+    <string name="btn_test_pause">Test Pause Audio</string>
+    <string name="media_result_title">Test Status:</string>
 </resources>
