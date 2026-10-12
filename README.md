@@ -282,6 +282,166 @@ Only install APKs you built yourself or trust. Do not disable Android security p
 
 > Debug APKs are intended for development. Use a signed release build for distribution.
 
+
+## 🧑‍🔧 Complete setup, USB testing, and installation troubleshooting
+
+This section walks through the process on **Windows + Android Studio + a physical Android phone**. Menu names can vary slightly by Android Studio and phone manufacturer.
+
+### 1. Set up the development environment
+
+1. Install Android Studio from the official Android developer website: https://developer.android.com/studio
+2. Open Android Studio and complete the setup wizard.
+3. In **Tools → SDK Manager**, install the Android SDK platform and SDK Build-Tools required by this project. Install **Android SDK Platform-Tools** too; this package provides `adb`.
+4. Clone the project:
+
+   ```powershell
+   git clone https://github.com/ashrithBalaji456/Smart_Sleep-_Timer.git
+   cd Smart_Sleep-_Timer
+   ```
+
+5. In Android Studio, choose **Open** and select the project folder containing `settings.gradle` or `settings.gradle.kts`.
+6. Allow Gradle sync to finish. If Android Studio asks to install a missing SDK component, review and install the required component.
+7. Run **Build → Make Project**. Resolve any build error before trying to install the APK.
+
+**If Gradle sync fails:** check your internet connection for the initial dependency download, use the JDK/Gradle configuration recommended by the project, and read the first meaningful error in the Build output. Avoid randomly upgrading Gradle, the Android Gradle Plugin, or dependencies just to silence an error.
+
+### 2. Enable USB debugging on your Android phone
+
+1. Unlock your phone and open **Settings → About phone**.
+2. Find **Build number** (sometimes under Software information) and tap it seven times. Enter your phone PIN if requested.
+3. Return to Settings and open **Developer options**.
+4. Enable **USB debugging**.
+5. Connect the phone to the computer using a USB cable that supports data transfer, not charging only.
+6. Unlock the phone. If prompted, approve **Allow USB debugging** and verify the computer's RSA fingerprint only if you trust that computer.
+7. If a USB notification appears, choose **File transfer / Android Auto** or another data-capable mode if needed by your device.
+
+When finished testing on a computer you do not trust, turn USB debugging off and revoke debugging authorizations in Developer options.
+
+### 3. Confirm that the computer can see the phone
+
+Open Android Studio's Terminal, Windows PowerShell, or Command Prompt from the project folder.
+
+```powershell
+adb devices
+```
+
+If `adb` is not recognized, run it using the Android SDK path. A common Windows path is:
+
+```powershell
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" devices
+```
+
+Interpret the result:
+
+- `device` — connected and authorized.
+- `unauthorized` — unlock the phone and approve the USB debugging prompt.
+- No device listed — try another USB data cable/port, reconnect the phone, and check the phone's USB mode.
+- `offline` — reconnect the device; if needed, restart ADB using the commands below.
+
+```powershell
+adb kill-server
+adb start-server
+adb devices
+```
+
+If Windows still cannot see the phone, install the appropriate USB driver from the phone manufacturer's official support source when one is required. Some devices use the Google USB Driver; many manufacturers provide their own driver. Do not download random driver bundles.
+
+### 4. Build the debug APK
+
+From the project root on Windows:
+
+```powershell
+.\gradlew.bat assembleDebug
+```
+
+Or use Android Studio's **Build → Build Bundle(s) / APK(s) → Build APK(s)** menu (wording may vary by version).
+
+After a successful build, the expected APK path for the standard debug variant is:
+
+```text
+app\build\outputs\apk\debug\app-debug.apk
+```
+
+Confirm the file exists before trying to install it. If the build fails, fix the build error first; an APK cannot be installed if it was not generated successfully.
+
+### 5. Install the app directly through USB (ADB)
+
+With the phone connected, unlocked, and authorized:
+
+```powershell
+adb install -r "app\build\outputs\apk\debug\app-debug.apk"
+```
+
+If `adb` is not on PATH, use the full path:
+
+```powershell
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" install -r "app\build\outputs\apk\debug\app-debug.apk"
+```
+
+- `-r` reinstalls the app while trying to preserve its app data.
+- A successful install prints `Success`.
+- To launch the app, use the phone's app drawer or click **Run** in Android Studio.
+
+**Alternative: run from Android Studio.** Select your phone in the device selector, choose the `app` run configuration, and click **Run ▶**. Android Studio builds, installs, and launches the app. This is usually the easiest way to test code changes.
+
+### 6. Install the APK without USB
+
+If you need to share the APK with your own phone:
+
+1. Build the APK and locate `app-debug.apk`.
+2. Transfer it using a trusted method, such as USB file transfer, your own cloud storage, or a messaging app.
+3. On the phone, open the APK from Downloads or the file manager.
+4. If Android asks, allow **Install unknown apps** for that specific app (for example, the browser or file manager you used to open the APK), then return to the installer.
+5. Review the package and install only if you trust the APK and know where it came from.
+6. Turn off that “allow from this source” setting again if you no longer need it.
+
+A debug APK is suitable for development and personal testing. For distributing a build to other people, prefer a properly signed release APK and share it from a trusted source.
+
+### 7. Common installation problems and safe fixes
+
+| Symptom | Likely cause | What to try |
+|---|---|---|
+| `adb` is not recognized | Platform-Tools is not on PATH | Use the full `adb.exe` path shown above or configure PATH to the SDK `platform-tools` folder |
+| Device is missing from `adb devices` | Cable, USB mode, driver, or port issue | Use a data-capable cable, unlock the phone, change USB mode, try another port, install the official driver if needed |
+| Device says `unauthorized` | Debugging approval not granted | Unlock the phone and approve the prompt; reconnect and run `adb devices` again |
+| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | Installed app is signed with a different key | Install a build signed with the same key, or uninstall the old copy if you accept that its local app data may be removed |
+| `INSTALL_FAILED_VERSION_DOWNGRADE` | APK version code is lower than installed version | Build/increment the version correctly, or uninstall the old app only if data loss is acceptable |
+| `INSTALL_FAILED_NO_MATCHING_ABIS` | APK does not include a compatible native CPU architecture | Review native dependencies and build configuration; this app should not need native libraries unless a dependency adds them |
+| `INSTALL_PARSE_FAILED...` | APK is corrupt, incomplete, or incompatible | Rebuild the APK, confirm the output file, and transfer it again |
+| “App not installed” | Possible signature conflict, version issue, compatibility problem, or damaged transfer | Install through ADB to obtain a clearer error; check Android version and build output |
+| Play Protect warning | Android has flagged an app or its behavior for review | Verify that you built the APK from your own source, inspect the warning, and use the official build. Do **not** disable Play Protect simply to bypass a warning |
+| App installs but crashes | Runtime exception or device-specific issue | Run from Android Studio and inspect **Logcat** for the crash stack trace |
+| Timer stops in background | Manufacturer battery management or service restrictions | Check app battery settings and test the intended foreground-service behavior; do not promise identical behavior across all devices |
+| Media does not pause | No active compatible session, access disabled, or player/platform behavior | Enable the required media/notification access, start playback first, and test again; media control is best-effort |
+| Completion notification is missing | Notification permission/channel disabled | Check Android app notification settings and the app's notification permission |
+
+**Important:** Avoid “fixes” that require disabling Play Protect, installing unknown driver packages, or granting unrelated permissions. Prefer the exact error from ADB or Logcat and solve the underlying cause.
+
+### 8. Capture evidence for your README
+
+For a useful demo, record a short end-to-end test:
+
+1. Show the timer home screen and selected duration.
+2. Start the timer and show the countdown.
+3. Lock the screen while the timer runs.
+4. Let the timer expire while a supported media app is playing.
+5. Show the media player paused and the completion notification.
+6. Add screenshots to `docs/screenshots/` and a screen recording to `docs/videos/`.
+
+Do not show personal messages, account details, or private notifications in public evidence. Include the phone model, Android version, APK variant, and date of testing so readers can understand the conditions.
+
+### 9. Final release checklist
+
+- [ ] Gradle sync and project build succeed.
+- [ ] APK output exists and installs on the target phone.
+- [ ] Start, pause, resume, cancel, and expiry are tested.
+- [ ] Media access disabled / no active media / notification denied are tested.
+- [ ] Background behavior and battery restrictions are checked.
+- [ ] Signed release APK is tested separately from debug APK.
+- [ ] Screenshots and recordings are genuine and committed to the repository.
+- [ ] Keystore files, signing passwords, local secrets, and private data are excluded from Git.
+- [ ] README instructions match the actual source code and manifest.
+
 ## 🗺️ Six-phase build journey
 
 The project was developed in the requested six phases.
