@@ -1,54 +1,48 @@
 package com.smartsleeptimer.app.viewmodel;
 
-import androidx.lifecycle.LiveData;
-import androidx.lifecycle.MutableLiveData;
-import androidx.lifecycle.ViewModel;
+import android.app.Application;
+import android.content.Intent;
 
-import com.smartsleeptimer.app.engine.SleepTimerEngine;
-import com.smartsleeptimer.app.engine.TimerListener;
+import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
+import androidx.lifecycle.AndroidViewModel;
+import androidx.lifecycle.LiveData;
+
 import com.smartsleeptimer.app.model.TimerState;
+import com.smartsleeptimer.app.service.SleepTimerService;
+import com.smartsleeptimer.app.util.TimerPreferences;
 
 /**
- * ViewModel that hosts the SleepTimerEngine and exposes LiveData streams to the UI.
- * Survives configuration changes such as device rotation and activity recreation.
+ * ViewModel coordinating between the UI and SleepTimerService.
+ * Survives configuration changes and process recreations by observing
+ * the service's static state and persistent TimerPreferences.
  */
-public class SleepTimerViewModel extends ViewModel implements TimerListener {
+public class SleepTimerViewModel extends AndroidViewModel {
 
-    private final SleepTimerEngine timerEngine;
-
-    private final MutableLiveData<Long> remainingMillisLiveData = new MutableLiveData<>();
-    private final MutableLiveData<Float> progressFractionLiveData = new MutableLiveData<>();
-    private final MutableLiveData<TimerState> timerStateLiveData = new MutableLiveData<>();
-    private final MutableLiveData<Long> selectedDurationLiveData = new MutableLiveData<>();
+    private final TimerPreferences preferences;
 
     private long lastActionClickTime = 0L;
     private static final long DEBOUNCE_THRESHOLD_MS = 300L;
 
-    public SleepTimerViewModel() {
-        this.timerEngine = new SleepTimerEngine();
-        this.timerEngine.setListener(this);
-
-        // Initialize state
-        remainingMillisLiveData.setValue(timerEngine.getRemainingMillis());
-        progressFractionLiveData.setValue(1.0f);
-        timerStateLiveData.setValue(timerEngine.getState());
-        selectedDurationLiveData.setValue(timerEngine.getSelectedDurationMillis());
+    public SleepTimerViewModel(@NonNull Application application) {
+        super(application);
+        this.preferences = new TimerPreferences(application);
     }
 
     public LiveData<Long> getRemainingMillis() {
-        return remainingMillisLiveData;
+        return SleepTimerService.getRemainingMillisLiveData();
     }
 
     public LiveData<Float> getProgressFraction() {
-        return progressFractionLiveData;
+        return SleepTimerService.getProgressFractionLiveData();
     }
 
     public LiveData<TimerState> getTimerState() {
-        return timerStateLiveData;
+        return SleepTimerService.getTimerStateLiveData();
     }
 
     public LiveData<Long> getSelectedDuration() {
-        return selectedDurationLiveData;
+        return SleepTimerService.getSelectedDurationLiveData();
     }
 
     private boolean isDebounced() {
@@ -64,63 +58,91 @@ public class SleepTimerViewModel extends ViewModel implements TimerListener {
         if (durationMillis <= 0) {
             return;
         }
-        timerEngine.setDuration(durationMillis);
-        selectedDurationLiveData.setValue(durationMillis);
+        TimerState currentState = getTimerState().getValue();
+        if (currentState == TimerState.RUNNING) {
+            // Cancel existing running timer before switching duration
+            cancelTimer();
+        }
+        preferences.saveInactiveState(TimerState.READY, durationMillis);
+
+        Intent intent = new Intent(getApplication(), SleepTimerService.class);
+        intent.setAction(SleepTimerService.ACTION_START);
+        intent.putExtra(SleepTimerService.EXTRA_DURATION_MS, durationMillis);
+        // Reset without running
+        cancelTimer();
+        preferences.saveInactiveState(TimerState.READY, durationMillis);
     }
 
     public boolean startTimer() {
         if (isDebounced()) {
             return false;
         }
-        return timerEngine.start();
+        TimerState state = getTimerState().getValue();
+        if (state == TimerState.RUNNING) {
+            return false; // Prevent duplicate timers
+        }
+
+        long duration = preferences.getTotalDurationMs(30 * 60 * 1000L);
+        Long currentSelected = getSelectedDuration().getValue();
+        if (currentSelected != null && currentSelected > 0) {
+            duration = currentSelected;
+        }
+
+        Intent intent = new Intent(getApplication(), SleepTimerService.class);
+        intent.setAction(SleepTimerService.ACTION_START);
+        intent.putExtra(SleepTimerService.EXTRA_DURATION_MS, duration);
+        ContextCompat.startForegroundService(getApplication(), intent);
+        return true;
     }
 
     public boolean pauseTimer() {
         if (isDebounced()) {
             return false;
         }
-        return timerEngine.pause();
+        TimerState state = getTimerState().getValue();
+        if (state != TimerState.RUNNING) {
+            return false;
+        }
+
+        Intent intent = new Intent(getApplication(), SleepTimerService.class);
+        intent.setAction(SleepTimerService.ACTION_PAUSE);
+        getApplication().startService(intent);
+        return true;
     }
 
     public boolean resumeTimer() {
         if (isDebounced()) {
             return false;
         }
-        return timerEngine.resume();
+        TimerState state = getTimerState().getValue();
+        if (state != TimerState.PAUSED) {
+            return false;
+        }
+
+        Intent intent = new Intent(getApplication(), SleepTimerService.class);
+        intent.setAction(SleepTimerService.ACTION_RESUME);
+        ContextCompat.startForegroundService(getApplication(), intent);
+        return true;
     }
 
     public void cancelTimer() {
         if (isDebounced()) {
             return;
         }
-        timerEngine.cancel();
+
+        Intent intent = new Intent(getApplication(), SleepTimerService.class);
+        intent.setAction(SleepTimerService.ACTION_CANCEL);
+        getApplication().startService(intent);
     }
 
     public void refreshTimer() {
-        timerEngine.refreshTick();
-    }
-
-    @Override
-    public void onTick(long remainingMillis, float progressFraction) {
-        remainingMillisLiveData.postValue(remainingMillis);
-        progressFractionLiveData.postValue(progressFraction);
-    }
-
-    @Override
-    public void onStateChanged(TimerState newState) {
-        timerStateLiveData.postValue(newState);
-    }
-
-    @Override
-    public void onCompleted() {
-        remainingMillisLiveData.postValue(0L);
-        progressFractionLiveData.postValue(0.0f);
-        timerStateLiveData.postValue(TimerState.COMPLETED);
-    }
-
-    @Override
-    protected void onCleared() {
-        super.onCleared();
-        timerEngine.cleanup();
+        // Recalculates remaining time if process or activity was recreated
+        long remaining = preferences.calculateCurrentRemainingMs();
+        TimerState state = preferences.getSavedState();
+        if (state == TimerState.RUNNING && remaining <= 0) {
+            Intent intent = new Intent(getApplication(), SleepTimerService.class);
+            intent.setAction(SleepTimerService.ACTION_EXPIRE);
+            getApplication().startService(intent);
+        }
     }
 }

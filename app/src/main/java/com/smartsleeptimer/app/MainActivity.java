@@ -1,7 +1,10 @@
 package com.smartsleeptimer.app;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -10,6 +13,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.ViewModelProvider;
 
@@ -27,9 +31,12 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Main Activity of Smart Sleep Timer.
- * Coordinates the sleep timer (Phase 1) and external media playback control inspection (Phase 2).
+ * Displays Phase 1 countdown timer with circular view, integrates Phase 2 media test card,
+ * and maintains continuous synchronization with Phase 3 background SleepTimerService.
  */
 public class MainActivity extends AppCompatActivity {
+
+    private static final int RC_POST_NOTIFICATIONS = 101;
 
     // ViewModels
     private SleepTimerViewModel timerViewModel;
@@ -119,7 +126,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupViewModels() {
-        // Phase 1: Sleep Timer ViewModel
+        // Phase 1 + 3: Sleep Timer ViewModel (connected to SleepTimerService)
         timerViewModel = new ViewModelProvider(this).get(SleepTimerViewModel.class);
 
         timerViewModel.getRemainingMillis().observe(this, remainingMillis -> {
@@ -148,15 +155,16 @@ public class MainActivity extends AppCompatActivity {
         mediaViewModel = new ViewModelProvider(this).get(MediaControlViewModel.class);
 
         mediaViewModel.isPermissionGranted().observe(this, this::renderPermissionStatus);
-
         mediaViewModel.getDetectedSession().observe(this, this::renderDetectedSession);
-
         mediaViewModel.getControlResult().observe(this, this::renderControlResult);
     }
 
     private void setupListeners() {
-        // Phase 1 timer controls
-        btnStart.setOnClickListener(v -> timerViewModel.startTimer());
+        // Phase 1 + 3 timer controls
+        btnStart.setOnClickListener(v -> {
+            checkAndRequestNotificationPermission();
+            timerViewModel.startTimer();
+        });
         btnPause.setOnClickListener(v -> timerViewModel.pauseTimer());
         btnResume.setOnClickListener(v -> timerViewModel.resumeTimer());
         btnCancel.setOnClickListener(v -> timerViewModel.cancelTimer());
@@ -186,8 +194,20 @@ public class MainActivity extends AppCompatActivity {
         });
 
         btnRefreshSessions.setOnClickListener(v -> mediaViewModel.refreshSessions());
-
         btnTestPauseAudio.setOnClickListener(v -> mediaViewModel.pauseActiveMedia());
+    }
+
+    private void checkAndRequestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(
+                        this,
+                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                        RC_POST_NOTIFICATIONS
+                );
+            }
+        }
     }
 
     private void renderPermissionStatus(Boolean isGranted) {
@@ -284,7 +304,6 @@ public class MainActivity extends AppCompatActivity {
                 btnStart.setVisibility(View.VISIBLE);
                 btnStart.setText(R.string.action_start);
                 layoutActiveControls.setVisibility(View.GONE);
-                Toast.makeText(this, R.string.timer_completed_toast, Toast.LENGTH_SHORT).show();
                 break;
         }
     }
@@ -350,6 +369,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        // Immediately sync countdown calculation with running service and persistence
         if (timerViewModel != null) {
             timerViewModel.refreshTimer();
         }

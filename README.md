@@ -1,8 +1,8 @@
-# Smart Sleep Timer — Phase 2: Android Media Playback Control
+# Smart Sleep Timer — Phase 3: Reliable Background Timer
 
-A modern, calming night-themed Android application that lets users set a sleep timer and inspect/control active media sessions across external media applications.
+A modern, calming night-themed Android application that lets users set a sleep timer for audio apps (Spotify, YouTube, Amazon Music, etc.) with drift-free background execution, Doze mode resilience, and persistent process recovery.
 
-This repository contains **Phase 1 (Timer Foundation)** and **Phase 2 (Android Media Playback Control)**. The overall project consists of exactly 6 phases.
+This repository contains **Phase 1 (Timer UI Foundation)**, **Phase 2 (Android Media Session Access)**, and **Phase 3 (Reliable Background Timer)**. The overall project consists of exactly 6 phases.
 
 ---
 
@@ -13,15 +13,19 @@ This repository contains **Phase 1 (Timer Foundation)** and **Phase 2 (Android M
 - Timer presets: 15m, 30m, 45m, 1h, 2h, and custom duration picker (Hours & Minutes).
 - Large countdown display and custom animated circular arc indicator (`CircularTimerView`).
 - Start, Pause, Resume, and Cancel state machine with 300ms click debounce.
-- Monotonic wall-clock calculations (`SystemClock.elapsedRealtime()`) and configuration change survival.
-- **⚡ 30-Second Quick Verification Timer** button for rapid testing.
+- **⚡ 30-Second Quick Verification Timer** for rapid testing.
 
-### Phase 2: Android Media Playback Control (New)
-- **Media Session Discovery**: Evaluates Android's `MediaSessionManager` and `MediaController` APIs.
-- **Notification Access Integration**: Declares and implements `MediaNotificationListenerService` as required by Android security to inspect active external sessions.
-- **Application Identification**: Resolves package names and displays friendly names (Spotify, YouTube, Amazon Music, etc.).
-- **Transport Controls**: Tests pause commands via `MediaController.getTransportControls().pause()` and media key event fallbacks.
-- **Media Control Test Section**: Dedicated UI card showing permission status, detected player, session state, `Refresh Sessions`, and `Test Pause Audio`.
+### Phase 2: Android Media Playback Control (Preserved)
+- `MediaSessionManager` and `MediaController` integration.
+- `MediaNotificationListenerService` declared and implemented for cross-app session access.
+- Application identification (Spotify, YouTube, Amazon Music, etc.) and transport pause testing.
+- Dedicated **Media Playback Control (Phase 2 Test)** card on the main dashboard.
+
+### Phase 3: Reliable Background Timer (New)
+- **Foreground Service Architecture**: `SleepTimerService` keeps the timer running independently of the Activity lifecycle.
+- **Battery-Conscious Native Chronometer**: Uses `NotificationCompat.Builder.setUsesChronometer(true)` and `setChronometerCountDown(true)` to display real-time second-by-second countdowns on the status bar and lock screen *without waking the CPU on every tick*.
+- **Doze Mode Alarm Wake-up**: `AlarmManager.setExactAndAllowWhileIdle()` with `TimerCompletionReceiver` guarantees the timer-completion event triggers at the exact second even when the phone is locked and stationary in deep Doze mode.
+- **Process Recovery Persistence**: `TimerPreferences` persists target deadlines in `SharedPreferences`. If Android terminates the process under memory pressure, reopening the app recalculates the remaining time against the stored deadline.
 
 ---
 
@@ -30,103 +34,109 @@ This repository contains **Phase 1 (Timer Foundation)** and **Phase 2 (Android M
 ```
 app/src/main/java/com/smartsleeptimer/app/
 ├── MainActivity.java                       # Main Activity coordinating Timer UI & Media Test Card
-├── media/                                  # [PHASE 2] Media Control Package
+├── service/                                # [PHASE 3] Background Execution Package
+│   ├── SleepTimerService.java              # Foreground Service managing notification & countdown
+│   └── TimerCompletionReceiver.java        # BroadcastReceiver for exact AlarmManager Doze wakeups
+├── util/
+│   ├── TimerPreferences.java               # [PHASE 3] Deadline persistence for process kill recovery
+│   └── TimeFormatter.java                  # Phase 1: Time and duration formatting utility
+├── media/                                  # Phase 2: Media Control Package
 │   ├── MediaAccessHelper.java              # Permission checks & Settings Intent creator
-│   ├── MediaNotificationListenerService.java # Required system service for active session access
+│   ├── MediaNotificationListenerService.java # NotificationListenerService for media session access
 │   ├── MediaSessionInfo.java               # Model for detected app, state, & track info
 │   ├── MediaControlResult.java             # Result model with readable status messages
 │   └── MediaControlManager.java            # Manages MediaSessionManager, controllers, & pause logic
 ├── viewmodel/
-│   ├── SleepTimerViewModel.java            # Phase 1: Timer state & tick LiveData
-│   └── MediaControlViewModel.java          # [PHASE 2] Media session & permission LiveData
+│   ├── SleepTimerViewModel.java            # Phase 1+3: Bridges UI to SleepTimerService and LiveData
+│   └── MediaControlViewModel.java          # Phase 2: Media session & permission LiveData
 ├── engine/
-│   ├── SleepTimerEngine.java               # Phase 1: Monotonic timer engine
-│   └── TimerListener.java                  # Phase 1: Listener contract
+│   ├── SleepTimerEngine.java               # Unit-testable timer state engine
+│   └── TimerListener.java                  # Listener contract
 ├── ui/
 │   ├── CircularTimerView.java              # Phase 1: Gradient arc custom view
 │   └── CustomDurationDialog.java           # Phase 1: Validated duration picker dialog
-├── model/
-│   └── TimerState.java                     # READY, RUNNING, PAUSED, COMPLETED
-└── util/
-    └── TimeFormatter.java                  # Time and duration formatting utility
+└── model/
+    └── TimerState.java                     # READY, RUNNING, PAUSED, COMPLETED
 ```
 
 ---
 
-## 🔐 Android Permissions & Setup Explanation
+## ⏱️ Reliable Timekeeping & Recovery Analysis
 
-### Why Notification Access is Required
-Android restricts applications from inspecting or controlling media sessions owned by other applications. Starting in Android 5.0 (API 21) and enforced in subsequent versions:
-1. `MediaSessionManager.getActiveSessions(ComponentName)` **strictly requires** a registered and enabled `NotificationListenerService`.
-2. Attempting to call `getActiveSessions` without this special access throws a `SecurityException`.
-3. To enable this, the user must navigate to **Android Settings > Notification Access (Special App Access)** and toggle on **Smart Sleep Timer**.
-4. The application includes a one-click button in the Media Control section (**"Enable Notification Access"**) that directly opens the appropriate system settings screen.
+### 1. Monotonic Deadline Calculation
+Rather than subtracting 1 second on each callback, `SleepTimerService` records the target monotonic deadline:
+$$\text{endTimeElapsedRealtime} = \text{SystemClock.elapsedRealtime}() + \text{remainingMillis}$$
+Whenever the Activity resumes, the screen unlocks, or a tick fires, remaining time is recalculated as:
+$$\text{remainingMillis} = \max(0, \text{endTimeElapsedRealtime} - \text{SystemClock.elapsedRealtime}())$$
+This makes timekeeping drift-free regardless of thread delays or background throttling.
+
+### 2. Process Death & Device Reboot Recovery
+- **Surviving Process Termination**: When the timer starts, `TimerPreferences` persists both `end_time_elapsed_ms` and `end_time_epoch_ms` (`System.currentTimeMillis() + remaining`). If Android terminates the app process, reopening the app immediately loads the stored epoch deadline:
+  - If $\text{now} \ge \text{end\_time\_epoch}$, the timer transitions to `COMPLETED`.
+  - If $\text{now} < \text{end\_time\_epoch}$, the exact remaining duration is restored and the timer resumes seamlessly.
+- **Device Reboot Limitation**: `SystemClock.elapsedRealtime()` resets to zero on device reboot. Because wall-clock time is also stored, the app can detect whether the timer expired while the phone was turned off upon relaunch.
 
 ---
 
-## 🧪 Detailed Manual Testing Procedure (Phase 2)
+## 🔋 Battery Optimization & Android Power Restrictions
+
+1. **Native Chronometer vs. CPU Polling**:
+   - Instead of running a 1-second WakeLock and continuously waking the CPU to update the notification, we use Android's built-in `setUsesChronometer(true)` and `setChronometerCountDown(true)`. The Android SystemUI updates the notification view natively, saving significant battery.
+2. **Doze Mode & AlarmManager**:
+   - In Android 6.0+, Doze mode restricts network access, CPU wakelocks, and standard `Handler` timers when the device is unplugged, stationary, and with the screen off.
+   - We schedule `AlarmManager.setExactAndAllowWhileIdle()`. When the deadline arrives, the OS wakes the device to deliver the completion event via `TimerCompletionReceiver`.
+3. **OEM Background Killers (Manufacturer Restrictions)**:
+   - Aggressive battery optimizations by manufacturers (such as Xiaomi MIUI/HyperOS, Samsung OneUI, Huawei, and OnePlus OxygenOS) can restrict background processes despite standard Foreground Services.
+   - For standard operation, our Foreground Service with `FOREGROUND_SERVICE_SPECIAL_USE` complies with official Android 14 (API 34) guidelines.
+
+---
+
+## 🧪 Detailed Manual Testing Procedure (Phase 3)
 
 Follow these steps on an Android device or emulator:
 
-1. **Initial State (No Permission)**:
-   - Launch Smart Sleep Timer.
-   - Scroll down to the **Media Playback Control (Phase 2 Test)** card.
-   - Verify the badge shows `Access Required` (Amber) and an explanation box appears.
-2. **Settings Navigation**:
-   - Tap **Enable Notification Access**.
-   - Verify that Android opens the **Device & app notifications** (or Notification Access) settings page.
-3. **Grant Permission**:
-   - Locate and select **Smart Sleep Timer** (or "Smart Sleep Timer Media Controller").
-   - Toggle **Allow notification access** ON and confirm the system warning.
-4. **Return and Verify State Update**:
-   - Return to Smart Sleep Timer.
-   - In `onResume()`, the app automatically detects the granted permission: the badge changes to `Access Granted` (Green) and the explanation box disappears.
-5. **Test with Spotify**:
-   - Open Spotify and start playing any song or podcast.
-   - Return to Smart Sleep Timer and tap **Refresh Sessions**.
-   - Verify that **Detected Player** displays `Spotify` and the session state shows `Playing`.
-   - Tap **Test Pause Audio**.
-   - Verify that the result displays `Pause command sent to Spotify` and playback pauses.
-6. **Test with YouTube / YouTube Music**:
-   - Start video or audio playback in YouTube or YouTube Music.
-   - Return to Smart Sleep Timer and tap **Refresh Sessions**.
-   - Verify `YouTube` / `YouTube Music` is detected.
-   - Tap **Test Pause Audio** and verify the pause behavior.
-7. **Test with Amazon Music / Other Media Players**:
-   - Repeat the test with Amazon Music, Apple Music, or SoundCloud.
-8. **Test with No Audio Playing**:
-   - Ensure all media applications are closed or paused.
-   - Tap **Refresh Sessions**.
-   - Verify the UI displays `No active media session found`.
-9. **Test Revoking Permission**:
-   - Go to Android Settings and revoke notification access for Smart Sleep Timer.
-   - Return to the app.
-   - Tap **Test Pause Audio** or **Refresh Sessions**.
-   - Verify the app handles the revocation gracefully without crashing, displaying `Media access required`.
-10. **Verify Phase 1 Regression Safety**:
-    - Tap **30-Second Quick Verification Timer** and tap **Start**.
-    - Verify countdown, Pause, Resume, and Cancel all continue to function flawlessly alongside media controls.
+1. **Minimize the App While Running**:
+   - Start a 15-minute or 30-second timer.
+   - Press the **Home** button to minimize Smart Sleep Timer.
+   - Observe that a persistent notification appears showing the real-time countdown.
+2. **Lock Screen for > 1 Minute**:
+   - Start a timer, press the power button to lock the device, and wait 1–2 minutes.
+   - Check the lock screen: the notification continues counting down accurately.
+3. **Unlock and Verify In-App Synchronization**:
+   - Unlock the phone and return to Smart Sleep Timer.
+   - Verify that the countdown and the circular arc match the elapsed time without jumping or restarting.
+4. **App Switching**:
+   - Start the timer and switch between Spotify, YouTube, and the browser.
+   - Return to Smart Sleep Timer and confirm the countdown continued uninterrupted.
+5. **Pause & Resume from Notification**:
+   - Tap **Pause** directly on the persistent notification.
+   - Notice the notification updates to *"Timer paused at MM:SS"* and the chronometer freezes.
+   - Tap **Resume** on the notification; countdown continues accurately.
+6. **Cancel from Notification**:
+   - Tap **Cancel** on the notification.
+   - Verify the notification dismisses and the in-app state resets to `READY`.
+7. **Simulate Process Recreation / Rotation**:
+   - Rotate the phone while the timer is running.
+   - Verify that the timer does not reset or duplicate.
+8. **Simulate Process Death**:
+   - In developer options, test with "Don't keep activities" or force-kill the activity from terminal.
+   - Reopen Smart Sleep Timer and verify that the remaining time is correctly restored from `TimerPreferences`.
+9. **Notification Permission Denied (Android 13+)**:
+   - Deny `POST_NOTIFICATIONS` permission.
+   - Verify that the in-app timer still functions and recalculates deadlines without crashing.
+10. **Phase 1 and Phase 2 Verification**:
+    - Confirm all presets (15m, 30m, 45m, 1h, 2h, custom) work as expected.
+    - Confirm the Phase 2 **Test Pause Audio** and **Refresh Sessions** buttons continue functioning.
 
 ---
 
-## ⚠️ Media Application Behavior & Known Limitations
+## 🔒 Strict Phase Boundaries
 
-1. **Third-Party App Implementation Differences**:
-   - **Spotify**: Fully exposes standard `MediaSession` and responds immediately to `TransportControls.pause()`.
-   - **YouTube**: In standard (free) YouTube, playback may pause automatically when backgrounded unless YouTube Premium / PiP is active. When background playback is active, it responds to transport pause commands.
-   - **Amazon Music / Apple Music**: Expose active media sessions when actively playing audio and accept standard pause commands.
-2. **Command Dispatch vs. Playback Confirmation**:
-   - Android's `MediaController.getTransportControls().pause()` is a one-way command dispatched to the target session. The actual pausing of audio output depends on whether the third-party application honors the command.
-3. **Emulator vs. Physical Device**:
-   - Emulators without Google Play Store or third-party streaming apps installed cannot verify real-world audio session control. Testing on a physical Android phone with genuine music apps is strongly recommended.
-
----
-
-## 🔒 Strict Phase Boundaries (Phase 2 Scope)
-
-- **Implemented**: MediaSession discovery, NotificationListenerService, app resolution, transport pause commands, and manual test interface.
-- **Deferred to Later Phases**:
-  - Timer-triggered automatic media pausing (Phase 3+).
-  - Continuous foreground service for long background countdowns.
-  - Final notification media controls & lock screen experience.
-  - Automatic device locking.
+- **Phase 3 Scope (Implemented)**: Foreground service execution, persistent notification with native countdown, Doze-mode AlarmManager scheduling, deadline persistence, and UI synchronization.
+- **Deferred to Phase 4**:
+  - Automatically pausing active media playback when the timer reaches zero.
+  - Media session audio focus ducking/fading.
+  - Final timer completion notification sound/vibration.
+- **Deferred to Phase 5 & 6**:
+  - UI polish and broad OEM compatibility testing (Phase 5).
+  - Final production build and APK release (Phase 6).
