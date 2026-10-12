@@ -5,12 +5,15 @@ import android.content.SharedPreferences;
 import android.os.SystemClock;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
+import com.smartsleeptimer.app.media.MediaControlResult;
 import com.smartsleeptimer.app.model.TimerState;
 
 /**
- * Manages persistent storage of timer deadlines and states using SharedPreferences.
- * Enables accurate recovery if the Activity or application process is killed by Android.
+ * Manages persistent storage of timer deadlines, states, and Phase 4 completion results
+ * using SharedPreferences. Enables accurate recovery if the Activity or application process
+ * is killed by Android.
  */
 public class TimerPreferences {
 
@@ -21,6 +24,12 @@ public class TimerPreferences {
     private static final String KEY_REMAINING_MS = "remaining_ms";
     private static final String KEY_END_TIME_EPOCH_MS = "end_time_epoch_ms";
     private static final String KEY_END_TIME_ELAPSED_MS = "end_time_elapsed_ms";
+
+    // Phase 4 completion result keys
+    private static final String KEY_COMPLETION_STATUS = "completion_status";
+    private static final String KEY_COMPLETION_MESSAGE = "completion_message";
+    private static final String KEY_COMPLETION_APP_NAME = "completion_app_name";
+    private static final String KEY_COMPLETION_TIMESTAMP = "completion_timestamp";
 
     private final SharedPreferences prefs;
 
@@ -70,6 +79,38 @@ public class TimerPreferences {
                 .apply();
     }
 
+    /**
+     * Saves the Phase 4 media-pause completion result and timestamp.
+     */
+    public void saveCompletionResult(@NonNull MediaControlResult result) {
+        prefs.edit()
+                .putString(KEY_COMPLETION_STATUS, result.getStatus().name())
+                .putString(KEY_COMPLETION_MESSAGE, result.getDisplayMessage())
+                .putString(KEY_COMPLETION_APP_NAME, result.getTargetAppName())
+                .putLong(KEY_COMPLETION_TIMESTAMP, System.currentTimeMillis())
+                .apply();
+    }
+
+    @Nullable
+    public MediaControlResult getLastCompletionResult() {
+        String statusStr = prefs.getString(KEY_COMPLETION_STATUS, null);
+        if (statusStr == null) {
+            return null;
+        }
+        try {
+            MediaControlResult.Status status = MediaControlResult.Status.valueOf(statusStr);
+            String message = prefs.getString(KEY_COMPLETION_MESSAGE, "Timer finished.");
+            String appName = prefs.getString(KEY_COMPLETION_APP_NAME, null);
+            return new MediaControlResult(status, message, appName);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public long getLastCompletionTimestamp() {
+        return prefs.getLong(KEY_COMPLETION_TIMESTAMP, 0L);
+    }
+
     public TimerState getSavedState() {
         String stateStr = prefs.getString(KEY_STATE, TimerState.READY.name());
         try {
@@ -107,7 +148,6 @@ public class TimerPreferences {
             return getTotalDurationMs(30 * 60 * 1000L);
         }
 
-        // Running: check monotonic first if available and consistent
         long endElapsed = getEndTimeElapsedRealtime();
         long nowElapsed = SystemClock.elapsedRealtime();
 
@@ -115,7 +155,6 @@ public class TimerPreferences {
             return endElapsed - nowElapsed;
         }
 
-        // Fallback to epoch (handles cases where device rebooted or process recreated after elapsed reset)
         long endEpoch = getEndTimeEpoch();
         long nowEpoch = System.currentTimeMillis();
 

@@ -52,4 +52,11 @@
     <string name="btn_refresh_sessions">Refresh Sessions</string>
     <string name="btn_test_pause">Test Pause Audio</string>
     <string name="media_result_title">Test Status:</string>
+
+    <!-- Phase 4: Completion Notification & UI -->
+    <string name="notification_completion_channel_name">Sleep Timer Completion</string>
+    <string name="notification_completion_channel_desc">Notifications when your sleep timer expires and audio is paused</string>
+    <string name="notification_completion_title">Smart Sleep Timer Finished</string>
+    <string name="btn_start_new_timer">Start New Timer</string>
+    <string name="completion_banner_title">Timer Completion Outcome</string>
 </resources>

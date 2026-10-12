@@ -10,7 +10,8 @@ import com.smartsleeptimer.app.media.MediaControlResult;
 import org.junit.Test;
 
 /**
- * Unit tests for MediaControlResult factory methods and status messages.
+ * Unit tests for MediaControlResult factory methods, status messages,
+ * and Phase 4 completion states.
  */
 public class MediaControlResultTest {
 
@@ -60,5 +61,46 @@ public class MediaControlResultTest {
         assertEquals(MediaControlResult.Status.UNABLE_TO_CONTROL_SESSION, result.getStatus());
         assertEquals("Unknown Player", result.getTargetAppName());
         assertTrue(result.getDisplayMessage().contains("Unable to control this media session"));
+    }
+
+    // Phase 4 Completion Tests
+    @Test
+    public void testTimerCompletedPlaybackPaused() {
+        MediaControlResult result = MediaControlResult.timerCompletedPlaybackPaused("Spotify");
+        assertEquals(MediaControlResult.Status.TIMER_COMPLETED_PAUSED_CONFIRMED, result.getStatus());
+        assertEquals("Spotify", result.getTargetAppName());
+        assertTrue(result.getDisplayMessage().contains("Playback paused in Spotify"));
+    }
+
+    @Test
+    public void testTimerCompletedPauseUnconfirmed() {
+        MediaControlResult result = MediaControlResult.timerCompletedPauseUnconfirmed("YouTube");
+        assertEquals(MediaControlResult.Status.TIMER_COMPLETED_PAUSE_UNCONFIRMED, result.getStatus());
+        assertEquals("YouTube", result.getTargetAppName());
+        assertTrue(result.getDisplayMessage().contains("unconfirmed state"));
+    }
+
+    @Test
+    public void testTimerCompletedNoSession() {
+        MediaControlResult result = MediaControlResult.timerCompletedNoSession();
+        assertEquals(MediaControlResult.Status.TIMER_COMPLETED_NO_SESSION, result.getStatus());
+        assertNull(result.getTargetAppName());
+        assertTrue(result.getDisplayMessage().contains("No active media player found"));
+    }
+
+    @Test
+    public void testTimerCompletedAccessMissing() {
+        MediaControlResult result = MediaControlResult.timerCompletedAccessMissing();
+        assertEquals(MediaControlResult.Status.TIMER_COMPLETED_ACCESS_MISSING, result.getStatus());
+        assertNull(result.getTargetAppName());
+        assertTrue(result.getDisplayMessage().contains("Media access permission is missing"));
+    }
+
+    @Test
+    public void testTimerCompletedPauseFailed() {
+        MediaControlResult result = MediaControlResult.timerCompletedPauseFailed("Amazon Music");
+        assertEquals(MediaControlResult.Status.TIMER_COMPLETED_PAUSE_FAILED, result.getStatus());
+        assertEquals("Amazon Music", result.getTargetAppName());
+        assertTrue(result.getDisplayMessage().contains("unavailable or failed in Amazon Music"));
     }
 }

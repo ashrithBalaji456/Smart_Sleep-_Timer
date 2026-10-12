@@ -20,18 +20,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Manages detection and interaction with active external media sessions.
- * Interacts with MediaSessionManager and MediaController APIs without force-stopping or
- * modifying external apps.
+ * Manages detection, manual testing (Phase 2), and automatic timer completion pausing
+ * with state verification (Phase 4).
+ * Communicates with MediaSessionManager and MediaController APIs without force-stopping
+ * or modifying external apps.
  */
 public class MediaControlManager {
 
     private static final String TAG = "MediaControlManager";
+    private static final long VERIFICATION_TIMEOUT_MS = 600L;
 
     public interface MediaControlListener {
         void onSessionDetected(@Nullable MediaSessionInfo sessionInfo);
         void onControlResult(@NonNull MediaControlResult result);
         void onPermissionStatusChanged(boolean isGranted);
+    }
+
+    public interface OnCompletionMediaPauseListener {
+        void onCompletionResult(@NonNull MediaControlResult result);
     }
 
     private final Context appContext;
@@ -151,7 +157,7 @@ public class MediaControlManager {
     }
 
     /**
-     * Attempts to send a pause command to the active media session.
+     * Manual Phase 2 pause test method.
      */
     @NonNull
     public MediaControlResult pauseActiveMedia() {
@@ -187,7 +193,6 @@ public class MediaControlManager {
                 controls.pause();
                 Log.i(TAG, "Sent transportControls.pause() to " + targetController.getPackageName());
             } else {
-                // Secondary fallback via Media Button KeyEvents
                 dispatchMediaKeyEvent(targetController, KeyEvent.KEYCODE_MEDIA_PAUSE);
             }
 
@@ -201,6 +206,74 @@ public class MediaControlManager {
                     : MediaControlResult.pauseUnavailable(appName);
             if (listener != null) listener.onControlResult(result);
             return result;
+        }
+    }
+
+    /**
+     * Phase 4: Automatic Media Pause at Timer Completion.
+     * Uses documented session selection strategy, dispatches pause command,
+     * and performs a timed verification check to determine if playback confirmed paused.
+     */
+    public void pauseAtTimerCompletion(@NonNull OnCompletionMediaPauseListener callback) {
+        if (!checkPermission()) {
+            callback.onCompletionResult(MediaControlResult.timerCompletedAccessMissing());
+            return;
+        }
+
+        List<MediaController> controllers = getActiveControllers();
+        if (controllers.isEmpty()) {
+            callback.onCompletionResult(MediaControlResult.timerCompletedNoSession());
+            return;
+        }
+
+        MediaController targetController = selectTargetController(controllers);
+        if (targetController == null) {
+            callback.onCompletionResult(MediaControlResult.timerCompletedNoSession());
+            return;
+        }
+
+        String appName = resolveAppName(targetController.getPackageName());
+        PlaybackState playbackState = targetController.getPlaybackState();
+
+        long actions = playbackState != null ? playbackState.getActions() : 0L;
+        boolean supportsPause = (actions & (PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE | PlaybackState.ACTION_STOP)) != 0;
+
+        try {
+            MediaController.TransportControls controls = targetController.getTransportControls();
+            if (controls != null) {
+                controls.pause();
+                Log.i(TAG, "Auto-pause: sent transportControls.pause() to " + appName);
+            } else {
+                dispatchMediaKeyEvent(targetController, KeyEvent.KEYCODE_MEDIA_PAUSE);
+                Log.i(TAG, "Auto-pause: dispatched media key event to " + appName);
+            }
+
+            // Schedule a post-check verification with 600ms timeout
+            mainHandler.postDelayed(() -> {
+                try {
+                    PlaybackState newState = targetController.getPlaybackState();
+                    if (newState != null) {
+                        int stateCode = newState.getState();
+                        if (stateCode == PlaybackState.STATE_PAUSED ||
+                                stateCode == PlaybackState.STATE_STOPPED ||
+                                stateCode == PlaybackState.STATE_NONE) {
+                            Log.i(TAG, "Auto-pause confirmed: playback is paused/stopped in " + appName);
+                            callback.onCompletionResult(MediaControlResult.timerCompletedPlaybackPaused(appName));
+                            return;
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "Error checking verification state for " + appName + ": " + e.getMessage());
+                }
+
+                // If state remains PLAYING or is unconfirmed
+                Log.i(TAG, "Auto-pause unconfirmed: command sent but final state not verified in " + appName);
+                callback.onCompletionResult(MediaControlResult.timerCompletedPauseUnconfirmed(appName));
+            }, VERIFICATION_TIMEOUT_MS);
+
+        } catch (Exception e) {
+            Log.e(TAG, "Exception during auto-pause for " + appName + ": " + e.getMessage());
+            callback.onCompletionResult(MediaControlResult.timerCompletedPauseFailed(appName));
         }
     }
 
@@ -234,6 +307,14 @@ public class MediaControlManager {
         return controllers;
     }
 
+    /**
+     * Documented Selection Strategy when multiple media sessions exist:
+     * 1. Prioritize sessions actively in STATE_PLAYING, STATE_BUFFERING, or STATE_CONNECTING.
+     * 2. Among playing sessions, prioritize one that explicitly advertises ACTION_PAUSE or ACTION_PLAY_PAUSE.
+     * 3. If no session is actively playing, select the first session advertising ACTION_PAUSE that was
+     *    recently paused (avoiding random inactive apps).
+     * 4. If none match, fallback to the primary active session in the system list.
+     */
     @Nullable
     private MediaController selectTargetController(@NonNull List<MediaController> controllers) {
         MediaController firstPlaying = null;
@@ -242,7 +323,12 @@ public class MediaControlManager {
         for (MediaController controller : controllers) {
             PlaybackState state = controller.getPlaybackState();
             if (state != null) {
-                if (state.getState() == PlaybackState.STATE_PLAYING) {
+                int stateCode = state.getState();
+                boolean isPlaying = (stateCode == PlaybackState.STATE_PLAYING ||
+                        stateCode == PlaybackState.STATE_BUFFERING ||
+                        stateCode == PlaybackState.STATE_CONNECTING);
+
+                if (isPlaying) {
                     firstPlaying = controller;
                     break;
                 }
@@ -322,7 +408,6 @@ public class MediaControlManager {
 
     @NonNull
     public String resolveAppName(@NonNull String packageName) {
-        // Direct known friendly names
         if ("com.spotify.music".equalsIgnoreCase(packageName)) return "Spotify";
         if ("com.google.android.youtube".equalsIgnoreCase(packageName)) return "YouTube";
         if ("com.google.android.apps.youtube.music".equalsIgnoreCase(packageName)) return "YouTube Music";

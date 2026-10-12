@@ -31,8 +31,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Main Activity of Smart Sleep Timer.
- * Displays Phase 1 countdown timer with circular view, integrates Phase 2 media test card,
- * and maintains continuous synchronization with Phase 3 background SleepTimerService.
+ * Coordinates Phase 1 countdown timer with circular view, Phase 2 media test card,
+ * Phase 3 background SleepTimerService, and Phase 4 automatic media pause outcome presentation.
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -73,6 +73,12 @@ public class MainActivity extends AppCompatActivity {
     private Button btnRefreshSessions;
     private Button btnTestPauseAudio;
     private TextView tvMediaResultMessage;
+
+    // Phase 4: Timer Completion Outcome Views
+    private LinearLayout cardCompletionOutcome;
+    private TextView tvCompletionHeader;
+    private TextView tvCompletionMessage;
+    private Button btnStartNewTimer;
 
     private static final long DURATION_15M = TimeUnit.MINUTES.toMillis(15);
     private static final long DURATION_30M = TimeUnit.MINUTES.toMillis(30);
@@ -123,6 +129,12 @@ public class MainActivity extends AppCompatActivity {
         btnRefreshSessions = findViewById(R.id.btnRefreshSessions);
         btnTestPauseAudio = findViewById(R.id.btnTestPauseAudio);
         tvMediaResultMessage = findViewById(R.id.tvMediaResultMessage);
+
+        // Phase 4 views
+        cardCompletionOutcome = findViewById(R.id.cardCompletionOutcome);
+        tvCompletionHeader = findViewById(R.id.tvCompletionHeader);
+        tvCompletionMessage = findViewById(R.id.tvCompletionMessage);
+        btnStartNewTimer = findViewById(R.id.btnStartNewTimer);
     }
 
     private void setupViewModels() {
@@ -151,6 +163,9 @@ public class MainActivity extends AppCompatActivity {
 
         timerViewModel.getTimerState().observe(this, this::renderTimerState);
 
+        // Phase 4: Observe auto-pause completion result
+        timerViewModel.getLastCompletionResult().observe(this, this::renderCompletionOutcome);
+
         // Phase 2: Media Control ViewModel
         mediaViewModel = new ViewModelProvider(this).get(MediaControlViewModel.class);
 
@@ -162,26 +177,59 @@ public class MainActivity extends AppCompatActivity {
     private void setupListeners() {
         // Phase 1 + 3 timer controls
         btnStart.setOnClickListener(v -> {
+            if (cardCompletionOutcome != null) {
+                cardCompletionOutcome.setVisibility(View.GONE);
+            }
             checkAndRequestNotificationPermission();
             timerViewModel.startTimer();
         });
         btnPause.setOnClickListener(v -> timerViewModel.pauseTimer());
         btnResume.setOnClickListener(v -> timerViewModel.resumeTimer());
-        btnCancel.setOnClickListener(v -> timerViewModel.cancelTimer());
+        btnCancel.setOnClickListener(v -> {
+            if (cardCompletionOutcome != null) {
+                cardCompletionOutcome.setVisibility(View.GONE);
+            }
+            timerViewModel.cancelTimer();
+        });
 
         // Presets
-        btnPreset15m.setOnClickListener(v -> timerViewModel.setDuration(DURATION_15M));
-        btnPreset30m.setOnClickListener(v -> timerViewModel.setDuration(DURATION_30M));
-        btnPreset45m.setOnClickListener(v -> timerViewModel.setDuration(DURATION_45M));
-        btnPreset1h.setOnClickListener(v -> timerViewModel.setDuration(DURATION_1H));
-        btnPreset2h.setOnClickListener(v -> timerViewModel.setDuration(DURATION_2H));
+        btnPreset15m.setOnClickListener(v -> {
+            hideCompletionCard();
+            timerViewModel.setDuration(DURATION_15M);
+        });
+        btnPreset30m.setOnClickListener(v -> {
+            hideCompletionCard();
+            timerViewModel.setDuration(DURATION_30M);
+        });
+        btnPreset45m.setOnClickListener(v -> {
+            hideCompletionCard();
+            timerViewModel.setDuration(DURATION_45M);
+        });
+        btnPreset1h.setOnClickListener(v -> {
+            hideCompletionCard();
+            timerViewModel.setDuration(DURATION_1H);
+        });
+        btnPreset2h.setOnClickListener(v -> {
+            hideCompletionCard();
+            timerViewModel.setDuration(DURATION_2H);
+        });
 
         btnPreset30sTest.setOnClickListener(v -> {
+            hideCompletionCard();
             timerViewModel.setDuration(DURATION_30S);
             Toast.makeText(this, "30-Second verification timer selected", Toast.LENGTH_SHORT).show();
         });
 
-        btnPresetCustom.setOnClickListener(v -> showCustomDurationDialog());
+        btnPresetCustom.setOnClickListener(v -> {
+            hideCompletionCard();
+            showCustomDurationDialog();
+        });
+
+        // Phase 4: Start New Timer action button on completion card
+        btnStartNewTimer.setOnClickListener(v -> {
+            hideCompletionCard();
+            timerViewModel.setDuration(currentSelectedDuration);
+        });
 
         // Phase 2 media controls
         btnGrantAccess.setOnClickListener(v -> {
@@ -195,6 +243,12 @@ public class MainActivity extends AppCompatActivity {
 
         btnRefreshSessions.setOnClickListener(v -> mediaViewModel.refreshSessions());
         btnTestPauseAudio.setOnClickListener(v -> mediaViewModel.pauseActiveMedia());
+    }
+
+    private void hideCompletionCard() {
+        if (cardCompletionOutcome != null) {
+            cardCompletionOutcome.setVisibility(View.GONE);
+        }
     }
 
     private void checkAndRequestNotificationPermission() {
@@ -242,6 +296,7 @@ public class MainActivity extends AppCompatActivity {
         int textColor;
         switch (result.getStatus()) {
             case PAUSE_COMMAND_SENT:
+            case TIMER_COMPLETED_PAUSED_CONFIRMED:
                 textColor = ContextCompat.getColor(this, R.color.primary_accent);
                 break;
             case ACTIVE_SESSION_DETECTED:
@@ -249,15 +304,51 @@ public class MainActivity extends AppCompatActivity {
                 break;
             case MEDIA_ACCESS_REQUIRED:
             case PAUSE_COMMAND_UNAVAILABLE:
+            case TIMER_COMPLETED_ACCESS_MISSING:
+            case TIMER_COMPLETED_PAUSE_UNCONFIRMED:
                 textColor = ContextCompat.getColor(this, R.color.status_paused);
                 break;
             case UNABLE_TO_CONTROL_SESSION:
             case NO_ACTIVE_SESSION_FOUND:
+            case TIMER_COMPLETED_NO_SESSION:
+            case TIMER_COMPLETED_PAUSE_FAILED:
             default:
                 textColor = ContextCompat.getColor(this, R.color.text_secondary);
                 break;
         }
         tvMediaResultMessage.setTextColor(textColor);
+    }
+
+    private void renderCompletionOutcome(MediaControlResult result) {
+        if (cardCompletionOutcome == null) return;
+
+        TimerState currentState = timerViewModel.getTimerState().getValue();
+        if (currentState != TimerState.COMPLETED) {
+            cardCompletionOutcome.setVisibility(View.GONE);
+            return;
+        }
+
+        if (result == null) {
+            result = timerViewModel.getPersistedCompletionResult();
+        }
+
+        if (result != null) {
+            cardCompletionOutcome.setVisibility(View.VISIBLE);
+            tvCompletionMessage.setText(result.getDisplayMessage());
+
+            switch (result.getStatus()) {
+                case TIMER_COMPLETED_PAUSED_CONFIRMED:
+                    tvCompletionHeader.setTextColor(ContextCompat.getColor(this, R.color.status_completed));
+                    break;
+                case TIMER_COMPLETED_PAUSE_UNCONFIRMED:
+                case TIMER_COMPLETED_ACCESS_MISSING:
+                    tvCompletionHeader.setTextColor(ContextCompat.getColor(this, R.color.status_paused));
+                    break;
+                default:
+                    tvCompletionHeader.setTextColor(ContextCompat.getColor(this, R.color.primary_accent));
+                    break;
+            }
+        }
     }
 
     private void showCustomDurationDialog() {
@@ -279,6 +370,7 @@ public class MainActivity extends AppCompatActivity {
                 btnStart.setVisibility(View.VISIBLE);
                 btnStart.setText(R.string.action_start);
                 layoutActiveControls.setVisibility(View.GONE);
+                hideCompletionCard();
                 break;
 
             case RUNNING:
@@ -288,6 +380,7 @@ public class MainActivity extends AppCompatActivity {
                 btnPause.setVisibility(View.VISIBLE);
                 btnResume.setVisibility(View.GONE);
                 btnCancel.setVisibility(View.VISIBLE);
+                hideCompletionCard();
                 break;
 
             case PAUSED:
@@ -297,6 +390,7 @@ public class MainActivity extends AppCompatActivity {
                 btnPause.setVisibility(View.GONE);
                 btnResume.setVisibility(View.VISIBLE);
                 btnCancel.setVisibility(View.VISIBLE);
+                hideCompletionCard();
                 break;
 
             case COMPLETED:
@@ -304,6 +398,12 @@ public class MainActivity extends AppCompatActivity {
                 btnStart.setVisibility(View.VISIBLE);
                 btnStart.setText(R.string.action_start);
                 layoutActiveControls.setVisibility(View.GONE);
+
+                MediaControlResult result = timerViewModel.getLastCompletionResult().getValue();
+                if (result == null) {
+                    result = timerViewModel.getPersistedCompletionResult();
+                }
+                renderCompletionOutcome(result);
                 break;
         }
     }
@@ -369,12 +469,20 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Immediately sync countdown calculation with running service and persistence
         if (timerViewModel != null) {
             timerViewModel.refreshTimer();
         }
         if (mediaViewModel != null) {
             mediaViewModel.checkAndRefresh();
+        }
+
+        // Check if returning to a completed timer
+        if (timerViewModel != null && timerViewModel.getTimerState().getValue() == TimerState.COMPLETED) {
+            MediaControlResult result = timerViewModel.getLastCompletionResult().getValue();
+            if (result == null) {
+                result = timerViewModel.getPersistedCompletionResult();
+            }
+            renderCompletionOutcome(result);
         }
     }
 

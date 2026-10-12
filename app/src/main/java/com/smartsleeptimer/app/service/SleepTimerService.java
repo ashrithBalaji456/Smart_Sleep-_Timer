@@ -11,7 +11,6 @@ import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.Handler;
-import android.os.IBinder;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
@@ -24,14 +23,19 @@ import androidx.lifecycle.MutableLiveData;
 
 import com.smartsleeptimer.app.MainActivity;
 import com.smartsleeptimer.app.R;
+import com.smartsleeptimer.app.media.MediaControlManager;
+import com.smartsleeptimer.app.media.MediaControlResult;
 import com.smartsleeptimer.app.model.TimerState;
 import com.smartsleeptimer.app.util.TimeFormatter;
 import com.smartsleeptimer.app.util.TimerPreferences;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 /**
  * Foreground Service that manages reliable background countdown execution,
  * persists session state, schedules exact AlarmManager wakeups for Doze mode,
- * and maintains a persistent notification.
+ * automatically pauses media at timer completion with state verification (Phase 4),
+ * and issues dedicated completion notifications.
  */
 public class SleepTimerService extends Service {
 
@@ -44,8 +48,10 @@ public class SleepTimerService extends Service {
     public static final String ACTION_EXPIRE = "com.smartsleeptimer.app.ACTION_EXPIRE";
     public static final String EXTRA_DURATION_MS = "extra_duration_ms";
 
-    public static final String CHANNEL_ID = "sleep_timer_channel";
-    private static final int NOTIFICATION_ID = 1001;
+    public static final String CHANNEL_ID_TIMER = "sleep_timer_channel";
+    public static final String CHANNEL_ID_COMPLETION = "sleep_timer_completion_channel";
+    private static final int NOTIFICATION_ID_TIMER = 1001;
+    private static final int NOTIFICATION_ID_COMPLETION = 1002;
     private static final long UI_TICK_INTERVAL_MS = 500L;
 
     // Observable LiveData streams for UI synchronization
@@ -53,9 +59,13 @@ public class SleepTimerService extends Service {
     private static final MutableLiveData<Float> progressFractionLiveData = new MutableLiveData<>(1.0f);
     private static final MutableLiveData<TimerState> timerStateLiveData = new MutableLiveData<>(TimerState.READY);
     private static final MutableLiveData<Long> selectedDurationLiveData = new MutableLiveData<>(30 * 60 * 1000L);
+    private static final MutableLiveData<MediaControlResult> lastCompletionResultLiveData = new MutableLiveData<>();
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final AtomicBoolean isCompleting = new AtomicBoolean(false);
+
     private TimerPreferences preferences;
+    private MediaControlManager mediaControlManager;
     private AlarmManager alarmManager;
     private PendingIntent alarmPendingIntent;
 
@@ -104,31 +114,46 @@ public class SleepTimerService extends Service {
         return selectedDurationLiveData;
     }
 
+    public static LiveData<MediaControlResult> getLastCompletionResultLiveData() {
+        return lastCompletionResultLiveData;
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
         preferences = new TimerPreferences(this);
+        mediaControlManager = new MediaControlManager(this);
         alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
-        createNotificationChannel();
+
+        createNotificationChannels();
         initAlarmPendingIntent();
         restorePersistedState();
     }
 
-    private void createNotificationChannel() {
+    private void createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            CharSequence name = getString(R.string.app_name);
-            String description = "Persistent notification for active sleep timer";
-            int importance = NotificationManager.IMPORTANCE_LOW; // Silent, non-intrusive
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, name, importance);
-            channel.setDescription(description);
-            channel.setShowBadge(false);
-            channel.enableLights(false);
-            channel.enableVibration(false);
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            if (nm == null) return;
 
-            NotificationManager notificationManager = getSystemService(NotificationManager.class);
-            if (notificationManager != null) {
-                notificationManager.createNotificationChannel(channel);
-            }
+            // Channel 1: Ongoing Countdown (Silent, Low Priority)
+            CharSequence nameTimer = getString(R.string.app_name);
+            String descTimer = "Persistent notification for active countdown timer";
+            NotificationChannel channelTimer = new NotificationChannel(CHANNEL_ID_TIMER, nameTimer, NotificationManager.IMPORTANCE_LOW);
+            channelTimer.setDescription(descTimer);
+            channelTimer.setShowBadge(false);
+            channelTimer.enableLights(false);
+            channelTimer.enableVibration(false);
+            nm.createNotificationChannel(channelTimer);
+
+            // Channel 2: Completion Alert (Default/High Priority with alert)
+            CharSequence nameComp = getString(R.string.notification_completion_channel_name);
+            String descComp = getString(R.string.notification_completion_channel_desc);
+            NotificationChannel channelComp = new NotificationChannel(CHANNEL_ID_COMPLETION, nameComp, NotificationManager.IMPORTANCE_DEFAULT);
+            channelComp.setDescription(descComp);
+            channelComp.setShowBadge(true);
+            channelComp.enableLights(true);
+            channelComp.enableVibration(true);
+            nm.createNotificationChannel(channelComp);
         }
     }
 
@@ -146,6 +171,12 @@ public class SleepTimerService extends Service {
         currentState = preferences.getSavedState();
         totalDurationMillis = preferences.getTotalDurationMs(30 * 60 * 1000L);
         remainingMillis = preferences.calculateCurrentRemainingMs();
+
+        // Restore any existing completion result
+        MediaControlResult savedResult = preferences.getLastCompletionResult();
+        if (savedResult != null) {
+            lastCompletionResultLiveData.postValue(savedResult);
+        }
 
         if (currentState == TimerState.RUNNING) {
             if (remainingMillis <= 0) {
@@ -193,6 +224,8 @@ public class SleepTimerService extends Service {
     }
 
     private void handleStart(long durationMs) {
+        isCompleting.set(false);
+
         if (durationMs > 0) {
             this.totalDurationMillis = durationMs;
             this.remainingMillis = durationMs;
@@ -237,6 +270,7 @@ public class SleepTimerService extends Service {
         if (currentState != TimerState.PAUSED || remainingMillis <= 0) {
             return;
         }
+        isCompleting.set(false);
 
         this.endTimeElapsedRealtime = SystemClock.elapsedRealtime() + remainingMillis;
         this.currentState = TimerState.RUNNING;
@@ -251,6 +285,7 @@ public class SleepTimerService extends Service {
     }
 
     private void handleCancel() {
+        isCompleting.set(false);
         mainHandler.removeCallbacks(tickRunnable);
         cancelExactAlarm();
 
@@ -258,14 +293,23 @@ public class SleepTimerService extends Service {
         currentState = TimerState.READY;
 
         preferences.saveInactiveState(TimerState.READY, totalDurationMillis);
-
         updateLiveData(remainingMillis, 1.0f, TimerState.READY);
 
         stopForeground(true);
         stopSelf();
     }
 
+    /**
+     * Phase 4: Timer completion logic executed exactly once per timer run.
+     * Stops the ongoing countdown, transitions to COMPLETED, attempts automatic media pause
+     * with verification, posts completion notification, and shuts down the service.
+     */
     private void completeTimer() {
+        if (!isCompleting.compareAndSet(false, true)) {
+            Log.d(TAG, "completeTimer: already completing/completed this session. Ignoring duplicate call.");
+            return;
+        }
+
         mainHandler.removeCallbacks(tickRunnable);
         cancelExactAlarm();
 
@@ -273,18 +317,56 @@ public class SleepTimerService extends Service {
         currentState = TimerState.COMPLETED;
 
         preferences.saveInactiveState(TimerState.COMPLETED, totalDurationMillis);
-
         updateLiveData(0L, 0.0f, TimerState.COMPLETED);
 
-        // Update notification with completion message before dismissing
-        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm != null) {
-            Notification notification = buildNotification(false, true);
-            nm.notify(NOTIFICATION_ID, notification);
-        }
+        // Remove the ongoing countdown notification from status bar
+        stopForeground(true);
 
-        stopForeground(false);
-        stopSelf();
+        Log.i(TAG, "completeTimer: Timer deadline reached. Triggering automatic media pause with verification.");
+
+        // Automatically attempt media pause with state verification
+        mediaControlManager.pauseAtTimerCompletion(result -> {
+            Log.i(TAG, "completeTimer result: " + result.getDisplayMessage());
+
+            // Persist the result and update LiveData
+            preferences.saveCompletionResult(result);
+            lastCompletionResultLiveData.postValue(result);
+
+            // Post dedicated completion notification
+            postCompletionNotification(result);
+
+            // Stop service cleanly
+            stopSelf();
+        });
+    }
+
+    private void postCompletionNotification(@NonNull MediaControlResult result) {
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+
+        Intent openAppIntent = new Intent(this, MainActivity.class);
+        openAppIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        int pFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            pFlags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        PendingIntent contentIntent = PendingIntent.getActivity(this, 12, openAppIntent, pFlags);
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID_COMPLETION)
+                .setSmallIcon(R.drawable.ic_moon_headphones)
+                .setContentTitle(getString(R.string.notification_completion_title))
+                .setContentText(result.getDisplayMessage())
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(result.getDisplayMessage()))
+                .setContentIntent(contentIntent)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+
+        try {
+            nm.notify(NOTIFICATION_ID_COMPLETION, builder.build());
+        } catch (Exception e) {
+            Log.w(TAG, "Could not post completion notification: " + e.getMessage());
+        }
     }
 
     private void scheduleExactAlarm(long triggerElapsedRealtime) {
@@ -308,7 +390,6 @@ public class SleepTimerService extends Service {
             Log.d(TAG, "Exact alarm scheduled for Doze wake-up at elapsed: " + triggerElapsedRealtime);
         } catch (SecurityException e) {
             Log.w(TAG, "SecurityException scheduling exact alarm: " + e.getMessage());
-            // Fallback to inexact if exact alarm permission was restricted by OS
             alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerElapsedRealtime, alarmPendingIntent);
         }
     }
@@ -323,12 +404,12 @@ public class SleepTimerService extends Service {
     }
 
     private void startForegroundNotification(boolean isRunning) {
-        Notification notification = buildNotification(isRunning, false);
+        Notification notification = buildOngoingNotification(isRunning);
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // Android 14+ (API 34)
-                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(NOTIFICATION_ID_TIMER, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
             } else {
-                startForeground(NOTIFICATION_ID, notification);
+                startForeground(NOTIFICATION_ID_TIMER, notification);
             }
         } catch (Exception e) {
             Log.e(TAG, "Error entering foreground mode: " + e.getMessage());
@@ -338,13 +419,13 @@ public class SleepTimerService extends Service {
     private void updateForegroundNotification(boolean isRunning) {
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm != null) {
-            Notification notification = buildNotification(isRunning, false);
-            nm.notify(NOTIFICATION_ID, notification);
+            Notification notification = buildOngoingNotification(isRunning);
+            nm.notify(NOTIFICATION_ID_TIMER, notification);
         }
     }
 
     @NonNull
-    private Notification buildNotification(boolean isRunning, boolean isCompleted) {
+    private Notification buildOngoingNotification(boolean isRunning) {
         Intent openAppIntent = new Intent(this, MainActivity.class);
         openAppIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         int pFlags = PendingIntent.FLAG_UPDATE_CURRENT;
@@ -353,7 +434,7 @@ public class SleepTimerService extends Service {
         }
         PendingIntent contentIntent = PendingIntent.getActivity(this, 10, openAppIntent, pFlags);
 
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID_TIMER)
                 .setSmallIcon(R.drawable.ic_moon_headphones)
                 .setContentTitle(getString(R.string.app_name))
                 .setContentIntent(contentIntent)
@@ -362,27 +443,19 @@ public class SleepTimerService extends Service {
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
 
-        if (isCompleted) {
-            builder.setContentText(getString(R.string.timer_completed_toast));
-            builder.setOngoing(false);
-            return builder.build();
-        }
-
         if (isRunning) {
-            // Uses system chronometer count-down to update the UI on the lockscreen & status bar
-            // without waking the CPU every second!
             long targetEpoch = System.currentTimeMillis() + remainingMillis;
             builder.setContentText("Sleep timer running • " + TimeFormatter.formatTime(remainingMillis));
             builder.setUsesChronometer(true);
             builder.setChronometerCountDown(true);
             builder.setWhen(targetEpoch);
 
-            // Notification Action: Pause
+            // Action: Pause
             Intent pauseIntent = new Intent(this, SleepTimerService.class).setAction(ACTION_PAUSE);
             PendingIntent pausePi = PendingIntent.getService(this, 21, pauseIntent, pFlags);
             builder.addAction(R.drawable.ic_pause, getString(R.string.action_pause), pausePi);
 
-            // Notification Action: Cancel
+            // Action: Cancel
             Intent cancelIntent = new Intent(this, SleepTimerService.class).setAction(ACTION_CANCEL);
             PendingIntent cancelPi = PendingIntent.getService(this, 22, cancelIntent, pFlags);
             builder.addAction(R.drawable.ic_stop, getString(R.string.action_cancel), cancelPi);
@@ -391,12 +464,12 @@ public class SleepTimerService extends Service {
             builder.setContentText("Timer paused at " + TimeFormatter.formatTime(remainingMillis));
             builder.setUsesChronometer(false);
 
-            // Notification Action: Resume
+            // Action: Resume
             Intent resumeIntent = new Intent(this, SleepTimerService.class).setAction(ACTION_RESUME);
             PendingIntent resumePi = PendingIntent.getService(this, 23, resumeIntent, pFlags);
             builder.addAction(R.drawable.ic_play_arrow, getString(R.string.action_resume), resumePi);
 
-            // Notification Action: Cancel
+            // Action: Cancel
             Intent cancelIntent = new Intent(this, SleepTimerService.class).setAction(ACTION_CANCEL);
             PendingIntent cancelPi = PendingIntent.getService(this, 24, cancelIntent, pFlags);
             builder.addAction(R.drawable.ic_stop, getString(R.string.action_cancel), cancelPi);
@@ -422,5 +495,8 @@ public class SleepTimerService extends Service {
         super.onDestroy();
         mainHandler.removeCallbacks(tickRunnable);
         cancelExactAlarm();
+        if (mediaControlManager != null) {
+            mediaControlManager.cleanup();
+        }
     }
 }

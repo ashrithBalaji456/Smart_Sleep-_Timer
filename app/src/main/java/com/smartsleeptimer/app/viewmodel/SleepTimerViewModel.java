@@ -8,14 +8,14 @@ import androidx.core.content.ContextCompat;
 import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
 
+import com.smartsleeptimer.app.media.MediaControlResult;
 import com.smartsleeptimer.app.model.TimerState;
 import com.smartsleeptimer.app.service.SleepTimerService;
 import com.smartsleeptimer.app.util.TimerPreferences;
 
 /**
- * ViewModel coordinating between the UI and SleepTimerService.
- * Survives configuration changes and process recreations by observing
- * the service's static state and persistent TimerPreferences.
+ * ViewModel coordinating between the UI, SleepTimerService, and TimerPreferences.
+ * Exposes live countdown, timer states, and Phase 4 completion results.
  */
 public class SleepTimerViewModel extends AndroidViewModel {
 
@@ -45,6 +45,14 @@ public class SleepTimerViewModel extends AndroidViewModel {
         return SleepTimerService.getSelectedDurationLiveData();
     }
 
+    public LiveData<MediaControlResult> getLastCompletionResult() {
+        return SleepTimerService.getLastCompletionResultLiveData();
+    }
+
+    public MediaControlResult getPersistedCompletionResult() {
+        return preferences.getLastCompletionResult();
+    }
+
     private boolean isDebounced() {
         long now = System.currentTimeMillis();
         if (now - lastActionClickTime < DEBOUNCE_THRESHOLD_MS) {
@@ -60,7 +68,6 @@ public class SleepTimerViewModel extends AndroidViewModel {
         }
         TimerState currentState = getTimerState().getValue();
         if (currentState == TimerState.RUNNING) {
-            // Cancel existing running timer before switching duration
             cancelTimer();
         }
         preferences.saveInactiveState(TimerState.READY, durationMillis);
@@ -68,7 +75,6 @@ public class SleepTimerViewModel extends AndroidViewModel {
         Intent intent = new Intent(getApplication(), SleepTimerService.class);
         intent.setAction(SleepTimerService.ACTION_START);
         intent.putExtra(SleepTimerService.EXTRA_DURATION_MS, durationMillis);
-        // Reset without running
         cancelTimer();
         preferences.saveInactiveState(TimerState.READY, durationMillis);
     }
