@@ -72,6 +72,8 @@ public class CompatibilityMatrixTest {
                 "com.google.android.youtube",
                 "com.google.android.apps.youtube.music",
                 "com.amazon.mp3",
+                "com.amazon.avod.thirdpartyclient",
+                "com.amazon.amazonvideo.livingroom",
                 "com.apple.android.music",
                 "com.soundcloud.android"
         };

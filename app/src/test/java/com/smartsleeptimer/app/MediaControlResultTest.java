@@ -97,6 +97,54 @@ public class MediaControlResultTest {
     }
 
     @Test
+    public void testPauseConfirmed() {
+        MediaControlResult result = MediaControlResult.pauseConfirmed("Spotify");
+        assertEquals(MediaControlResult.Status.PAUSE_CONFIRMED, result.getStatus());
+        assertEquals("Spotify", result.getTargetAppName());
+        assertTrue(result.getDisplayMessage().contains("Playback paused in Spotify"));
+    }
+
+    @Test
+    public void testPauseUnconfirmedStandard() {
+        MediaControlResult result = MediaControlResult.pauseUnconfirmed("YouTube");
+        assertEquals(MediaControlResult.Status.PAUSE_UNCONFIRMED, result.getStatus());
+        assertEquals("YouTube", result.getTargetAppName());
+        assertTrue(result.getDisplayMessage().contains("unconfirmed state"));
+    }
+
+    @Test
+    public void testPauseUnconfirmedPrimeVideo() {
+        MediaControlResult result = MediaControlResult.pauseUnconfirmed("Prime Video");
+        assertEquals(MediaControlResult.Status.PAUSE_UNCONFIRMED, result.getStatus());
+        assertEquals("Prime Video", result.getTargetAppName());
+        assertTrue(result.getDisplayMessage().contains("Prime Video may restrict third-party pause controls"));
+    }
+
+    @Test
+    public void testPauseUnavailablePrimeVideo() {
+        MediaControlResult result = MediaControlResult.pauseUnavailable("Prime Video");
+        assertEquals(MediaControlResult.Status.PAUSE_COMMAND_UNAVAILABLE, result.getStatus());
+        assertEquals("Prime Video", result.getTargetAppName());
+        assertTrue(result.getDisplayMessage().contains("Prime Video media session does not expose a remote pause action"));
+    }
+
+    @Test
+    public void testTimerCompletedPauseUnconfirmedPrimeVideo() {
+        MediaControlResult result = MediaControlResult.timerCompletedPauseUnconfirmed("Prime Video");
+        assertEquals(MediaControlResult.Status.TIMER_COMPLETED_PAUSE_UNCONFIRMED, result.getStatus());
+        assertEquals("Prime Video", result.getTargetAppName());
+        assertTrue(result.getDisplayMessage().contains("Prime Video may restrict third-party pause controls"));
+    }
+
+    @Test
+    public void testTimerCompletedPauseFailedPrimeVideo() {
+        MediaControlResult result = MediaControlResult.timerCompletedPauseFailed("Prime Video");
+        assertEquals(MediaControlResult.Status.TIMER_COMPLETED_PAUSE_FAILED, result.getStatus());
+        assertEquals("Prime Video", result.getTargetAppName());
+        assertTrue(result.getDisplayMessage().contains("Prime Video does not allow remote pause"));
+    }
+
+    @Test
     public void testTimerCompletedPauseFailed() {
         MediaControlResult result = MediaControlResult.timerCompletedPauseFailed("Amazon Music");
         assertEquals(MediaControlResult.Status.TIMER_COMPLETED_PAUSE_FAILED, result.getStatus());

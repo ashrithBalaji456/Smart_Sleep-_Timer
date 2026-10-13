@@ -295,15 +295,17 @@ public class MainActivity extends AppCompatActivity {
 
         int textColor;
         switch (result.getStatus()) {
-            case PAUSE_COMMAND_SENT:
+            case PAUSE_CONFIRMED:
             case TIMER_COMPLETED_PAUSED_CONFIRMED:
-                textColor = ContextCompat.getColor(this, R.color.primary_accent);
-                break;
             case ACTIVE_SESSION_DETECTED:
                 textColor = ContextCompat.getColor(this, R.color.status_completed);
                 break;
+            case PAUSE_COMMAND_SENT:
+                textColor = ContextCompat.getColor(this, R.color.primary_accent);
+                break;
             case MEDIA_ACCESS_REQUIRED:
             case PAUSE_COMMAND_UNAVAILABLE:
+            case PAUSE_UNCONFIRMED:
             case TIMER_COMPLETED_ACCESS_MISSING:
             case TIMER_COMPLETED_PAUSE_UNCONFIRMED:
                 textColor = ContextCompat.getColor(this, R.color.status_paused);

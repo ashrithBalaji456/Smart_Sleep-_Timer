@@ -15,6 +15,8 @@ public class MediaControlResult {
         NO_ACTIVE_SESSION_FOUND,
         ACTIVE_SESSION_DETECTED,
         PAUSE_COMMAND_SENT,
+        PAUSE_CONFIRMED,
+        PAUSE_UNCONFIRMED,
         PAUSE_COMMAND_UNAVAILABLE,
         UNABLE_TO_CONTROL_SESSION,
 
@@ -71,10 +73,38 @@ public class MediaControlResult {
         );
     }
 
+    public static MediaControlResult pauseConfirmed(@NonNull String appName) {
+        return new MediaControlResult(
+                Status.PAUSE_CONFIRMED,
+                "Playback paused in " + appName + ".",
+                appName
+        );
+    }
+
+    public static MediaControlResult pauseUnconfirmed(@NonNull String appName) {
+        String msg;
+        if ("Prime Video".equalsIgnoreCase(appName)) {
+            msg = "Pause command sent to Prime Video, but playback could not be verified paused. Prime Video may restrict third-party pause controls.";
+        } else {
+            msg = "Pause command sent to " + appName + " (unconfirmed state).";
+        }
+        return new MediaControlResult(
+                Status.PAUSE_UNCONFIRMED,
+                msg,
+                appName
+        );
+    }
+
     public static MediaControlResult pauseUnavailable(@NonNull String appName) {
+        String msg;
+        if ("Prime Video".equalsIgnoreCase(appName)) {
+            msg = "Pause command unavailable for Prime Video (Prime Video media session does not expose a remote pause action).";
+        } else {
+            msg = "Pause command unavailable for " + appName + ".";
+        }
         return new MediaControlResult(
                 Status.PAUSE_COMMAND_UNAVAILABLE,
-                "Pause command unavailable for " + appName + ".",
+                msg,
                 appName
         );
     }
@@ -98,9 +128,15 @@ public class MediaControlResult {
     }
 
     public static MediaControlResult timerCompletedPauseUnconfirmed(@NonNull String appName) {
+        String msg;
+        if ("Prime Video".equalsIgnoreCase(appName)) {
+            msg = "Sleep timer finished. Pause command sent to Prime Video, but playback could not be verified paused (Prime Video may restrict third-party pause controls).";
+        } else {
+            msg = "Sleep timer finished. Pause command sent to " + appName + " (unconfirmed state).";
+        }
         return new MediaControlResult(
                 Status.TIMER_COMPLETED_PAUSE_UNCONFIRMED,
-                "Sleep timer finished. Pause command sent to " + appName + " (unconfirmed state).",
+                msg,
                 appName
         );
     }
@@ -123,9 +159,15 @@ public class MediaControlResult {
 
     public static MediaControlResult timerCompletedPauseFailed(@Nullable String appName) {
         String target = appName != null ? " in " + appName : "";
+        String msg;
+        if ("Prime Video".equalsIgnoreCase(appName)) {
+            msg = "Sleep timer finished. Pause command unavailable or failed in Prime Video (Prime Video does not allow remote pause).";
+        } else {
+            msg = "Sleep timer finished. Pause command unavailable or failed" + target + ".";
+        }
         return new MediaControlResult(
                 Status.TIMER_COMPLETED_PAUSE_FAILED,
-                "Sleep timer finished. Pause command unavailable or failed" + target + ".",
+                msg,
                 appName
         );
     }

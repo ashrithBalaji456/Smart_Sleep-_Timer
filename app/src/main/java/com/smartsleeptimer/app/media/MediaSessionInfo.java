@@ -12,6 +12,7 @@ public class MediaSessionInfo {
     private final String appName;
     private final boolean isPlaying;
     private final boolean canPause;
+    private final long actions;
     private final String trackTitle;
     private final String artist;
     private final String playbackStateText;
@@ -23,10 +24,22 @@ public class MediaSessionInfo {
                             @Nullable String trackTitle,
                             @Nullable String artist,
                             @NonNull String playbackStateText) {
+        this(packageName, appName, isPlaying, canPause, 0L, trackTitle, artist, playbackStateText);
+    }
+
+    public MediaSessionInfo(@NonNull String packageName,
+                            @NonNull String appName,
+                            boolean isPlaying,
+                            boolean canPause,
+                            long actions,
+                            @Nullable String trackTitle,
+                            @Nullable String artist,
+                            @NonNull String playbackStateText) {
         this.packageName = packageName;
         this.appName = appName;
         this.isPlaying = isPlaying;
         this.canPause = canPause;
+        this.actions = actions;
         this.trackTitle = trackTitle;
         this.artist = artist;
         this.playbackStateText = playbackStateText;
@@ -48,6 +61,10 @@ public class MediaSessionInfo {
 
     public boolean canPause() {
         return canPause;
+    }
+
+    public long getActions() {
+        return actions;
     }
 
     @Nullable
